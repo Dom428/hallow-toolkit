@@ -1,4 +1,4 @@
-﻿<#
+<#
   Hallow Toolkit v3 - extra pages and sections. Dot-sourced by HallowToolkit.ps1 after the main pages are built.
 #>
 $script:PageShowHooks = @{}
@@ -330,7 +330,7 @@ Add-Tool $f 'Apply changes' 'Apply the ticks above' {
     $changed = 0; $explorer = $false
     foreach ($cb in $script:TweakBoxes) {
         $on = Test-Tweak $cb.Tag
-        if ($cb.Checked -ne $on) { Set-Tweak $cb.Tag $cb.Checked; $changed++; if ($cb.Tag.Id -in 'ext', 'hidden', 'classicmenu', 'endtask', 'thispc', 'startrec', 'copilot', 'bing') { $explorer = $true } }
+        if ($cb.Checked -ne $on) { Set-Tweak $cb.Tag $cb.Checked; $changed++; if ($cb.Tag.Id -in 'ext', 'hidden', 'classicmenu', 'endtask', 'thispc', 'startrec', 'copilot', 'bing', 'taskview', 'searchicon', 'startleft', 'seconds', 'widgets') { $explorer = $true } }
     }
     if (-not $changed) { Log 'Nothing changed.'; return }
     Update-TweakBoxes
@@ -342,6 +342,34 @@ Add-Tool $f 'Undo all' 'Back to Windows defaults' {
     Update-TweakBoxes
 } -Width 210 | Out-Null
 [void]$script:AfterShown.Add({ Update-TweakBoxes })
+
+Add-Section $f 'Who used your camera, microphone or location'
+Add-Tool $f 'Show history' 'Which apps, and when (read-only)' {
+    $camList.Items.Clear()
+    $rows = @(Get-DeviceAccessHistory | Sort-Object Last -Descending | Group-Object Device, App | ForEach-Object { $_.Group[0] } | Sort-Object Last -Descending)
+    foreach ($r in $rows) {
+        $li = New-Object System.Windows.Forms.ListViewItem($r.Device)
+        [void]$li.SubItems.Add($r.App)
+        [void]$li.SubItems.Add($(if ($r.InUse) { 'IN USE NOW' } else { '{0:yyyy-MM-dd HH:mm}' -f $r.Last }))
+        [void]$li.SubItems.Add($(if ($r.Seconds -ge 60) { '{0:N0} min' -f ($r.Seconds / 60) } elseif ($r.Seconds) { "$($r.Seconds) s" } else { '' }))
+        [void]$li.SubItems.Add($r.Path)
+        $li.ToolTipText = $r.Path
+        $li.ForeColor = $(if ($r.InUse) { $C.Bad } elseif ($r.Last -gt (Get-Date).AddDays(-1)) { $C.Warn } else { $C.Text })
+        [void]$camList.Items.Add($li)
+    }
+    $now = @($rows | Where-Object InUse)
+    Log ("{0} app(s) have used your camera, mic or location.{1}" -f @($rows.App | Select-Object -Unique).Count, $(if ($now) { " In use right now: $(($now | ForEach-Object { "$($_.App) ($($_.Device))" }) -join ', ')" } else { ' Nothing is using them right now.' }))
+} -Primary | Out-Null
+Add-Tool $f 'Camera & mic permissions' 'Windows settings to block apps' { Start-Process 'ms-settings:privacy-webcam'; Log 'Opened camera permissions (Microphone and Location are in the same list on the left).' } | Out-Null
+$camList = New-DarkList $f @(@('Device', 90), @('App', 190), @('Last used', 130), @('For', 70), @('Where', 370)) 860 170 $false
+$camList.ShowItemToolTips = $true; $f.SetFlowBreak($camList, $true)
+
+Add-Section $f 'Privacy clean - wipe your activity traces'
+Add-Note $f 'Clears recent files, jump lists, Explorer search/address history, the Run box and clipboard history. Your actual files are not touched.' | Out-Null
+Add-Tool $f 'Privacy clean' 'Clear recent-activity traces' {
+    if (-not (Confirm-Action "Clear these traces?`n`n  - Recent files list and Quick Access recents`n  - Jump lists (includes items you pinned in them)`n  - File Explorer search, address bar and Run box history`n  - Clipboard history (pinned clips are kept)`n`nYour actual files are not touched. This can't be undone.")) { return }
+    Invoke-PrivacyClean
+} -Primary | Out-Null
 
 Add-Section $f 'Debloat - remove preinstalled apps (reinstallable from the Store)'
 $bloatList = New-Object System.Windows.Forms.CheckedListBox

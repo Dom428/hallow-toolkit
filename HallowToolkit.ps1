@@ -825,6 +825,31 @@ Add-Tool $f 'Install CPU temp sensor' 'LibreHardwareMonitor (free, winget)' { In
 Add-Section $f 'Toolkit updates'
 Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
 Add-Tool $f 'Auto update check' 'Turn on / off (checks at launch)' { Switch-AutoUpdate } | Out-Null
+Add-Section $f 'Share your setup (tweaks + Boost list + toolkit settings)'
+Add-Tool $f 'Export my setup' 'Save a file to send to a friend' {
+    $d = New-Object System.Windows.Forms.SaveFileDialog
+    $d.Filter = 'Hallow setup (*.hallow.json)|*.hallow.json'; $d.FileName = "$env:USERNAME-setup.hallow.json"
+    $d.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+    if ($d.ShowDialog() -eq 'OK') { Export-HallowSetup $d.FileName }
+} | Out-Null
+Add-Tool $f 'Import a setup' 'Copy a friend''s tweaks and settings' {
+    $d = New-Object System.Windows.Forms.OpenFileDialog
+    $d.Filter = 'Hallow setup (*.hallow.json)|*.hallow.json|All files|*.*'; $d.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+    if ($d.ShowDialog() -ne 'OK') { return }
+    $plan = Read-HallowSetup $d.FileName
+    $on = ($plan.TurnOn | ForEach-Object { "  + $($_.Name)" }) -join "`n"
+    $off = ($plan.TurnOff | ForEach-Object { "  - $($_.Name)" }) -join "`n"
+    $msg = "Setup from $($plan.Source.From) ($($plan.Source.Created)).`n`nBoost list: $(@($plan.Source.Settings.BoostApps) -join ', ')`n`n"
+    $msg += $(if ($on) { "Turns ON:`n$on`n`n" } else { "No new tweaks to turn on.`n`n" })
+    if ($off) { $msg += "They have these OFF (you have them on):`n$off`n`n" }
+    $msg += 'Apply it?'
+    if (-not (Confirm-Action $msg)) { return }
+    $alsoOff = $false
+    if ($off) { $alsoOff = [System.Windows.Forms.MessageBox]::Show("Also turn OFF the $(@($plan.TurnOff).Count) tweak(s) they don't use?`n(No keeps yours as they are.)", $AppName, 'YesNo', 'Question') -eq 'Yes' }
+    Import-HallowSetup $plan $alsoOff
+    Update-TweakBoxes
+    Log 'Setup imported. Restart Explorer (button below) if taskbar changes do not show yet.'
+} | Out-Null
 Add-Section $f 'Fixes'
 Add-Tool $f 'Restart Explorer' 'Stuck taskbar or Start menu' { Restart-Explorer } | Out-Null
 Add-Tool $f 'Create restore point' 'Safety net before big changes' { New-RestorePoint } | Out-Null

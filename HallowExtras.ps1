@@ -282,6 +282,12 @@ $Tweaks = @(
     @{ Id = 'recall'; Group = 'Privacy'; Name = 'Turn off Recall snapshots'; Admin = $false; Ops = @(@('HKCU:\Software\Policies\Microsoft\Windows\WindowsAI', 'DisableAIDataAnalysis', 1, $null)) },
     @{ Id = 'activity'; Group = 'Privacy'; Name = 'Turn off activity history (admin)'; Admin = $true; Ops = @(@('HKLM:\SOFTWARE\Policies\Microsoft\Windows\System', 'PublishUserActivities', 0, $null)) },
     @{ Id = 'telemetry'; Group = 'Privacy'; Name = 'Minimum diagnostic data (admin)'; Admin = $true; Ops = @(@('HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection', 'AllowTelemetry', 1, $null)) },
+    @{ Id = 'location'; Group = 'Privacy'; Name = 'Location off for your apps'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location', 'Value', 'Deny', 'Allow')) },
+    @{ Id = 'speech'; Group = 'Privacy'; Name = 'Online speech recognition off'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy', 'HasAccepted', 0, 1)) },
+    @{ Id = 'inking'; Group = 'Privacy'; Name = 'Typing & inking personalization off'; Admin = $false; Ops = @(
+            @('HKCU:\Software\Microsoft\InputPersonalization', 'RestrictImplicitTextCollection', 1, 0),
+            @('HKCU:\Software\Microsoft\InputPersonalization', 'RestrictImplicitInkCollection', 1, 0),
+            @('HKCU:\Software\Microsoft\Personalization\Settings', 'AcceptedPrivacyPolicy', 0, 1)) },
     @{ Id = 'ext'; Group = 'Quality of life'; Name = 'Show file extensions (.exe, .zip...)'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'HideFileExt', 0, 1)) },
     @{ Id = 'hidden'; Group = 'Quality of life'; Name = 'Show hidden files'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'Hidden', 1, 2)) },
     @{ Id = 'classicmenu'; Group = 'Quality of life'; Name = 'Classic right-click menu (no "Show more options")'; Admin = $false; Ops = @(@('HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32', '(default)', '', 'KEY')) },
@@ -290,6 +296,19 @@ $Tweaks = @(
     @{ Id = 'dark'; Group = 'Quality of life'; Name = 'Dark mode for Windows and apps'; Admin = $false; Ops = @(
             @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize', 'AppsUseLightTheme', 0, 1),
             @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize', 'SystemUsesLightTheme', 0, 1)) },
+    @{ Id = 'clipboard'; Group = 'Quality of life'; Name = 'Clipboard history (Win+V)'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Clipboard', 'EnableClipboardHistory', 1, 0)) },
+    @{ Id = 'seconds'; Group = 'Quality of life'; Name = 'Seconds on the taskbar clock'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'ShowSecondsInSystemClock', 1, 0)) },
+    @{ Id = 'taskview'; Group = 'Taskbar'; Name = 'Hide the Task View button'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'ShowTaskViewButton', 0, 1)) },
+    @{ Id = 'searchicon'; Group = 'Taskbar'; Name = 'Search as a small icon (not a big box)'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Search', 'SearchboxTaskbarMode', 1, 2)) },
+    @{ Id = 'startleft'; Group = 'Taskbar'; Name = 'Start button on the left'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'TaskbarAl', 0, 1)) },
+    @{ Id = 'widgets'; Group = 'Taskbar'; Name = 'Remove Widgets / news (admin)'; Admin = $true; Ops = @(@('HKLM:\SOFTWARE\Policies\Microsoft\Dsh', 'AllowNewsAndInterests', 0, $null)) },
+    @{ Id = 'edgebg'; Group = 'Performance'; Name = 'Edge stops running after you close it (admin)'; Admin = $true; Ops = @(
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'BackgroundModeEnabled', 0, $null),
+            @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'StartupBoostEnabled', 0, $null)) },
+    @{ Id = 'faststart'; Group = 'Performance'; Name = 'Fast Startup off - shut down = real fresh start (admin)'; Admin = $true; Ops = @(@('HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power', 'HiberbootEnabled', 0, 1)) },
+    @{ Id = 'hiber'; Group = 'Performance'; Name = 'Hibernation off - frees the hiberfil.sys space on C: (admin)'; Admin = $true; Ops = @()
+        Test = { (Get-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' 'HibernateEnabled') -eq 0 }
+        Apply = { param($On) powercfg /hibernate $(if ($On) { 'off' } else { 'on' }) | Out-Null } },
     @{ Id = 'sticky'; Group = 'Gaming'; Name = 'No Sticky Keys pop-up when pressing Shift 5 times'; Admin = $false; Ops = @(@('HKCU:\Control Panel\Accessibility\StickyKeys', 'Flags', '506', '510')) },
     @{ Id = 'gamedvr'; Group = 'Gaming'; Name = 'Turn off Game Bar background recording'; Admin = $false; Ops = @(
             @('HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR', 'AppCaptureEnabled', 0, 1),
@@ -302,6 +321,7 @@ function Get-RegValue([string]$Path, [string]$Name) {
     if ($p) { $p.$Name } else { $null }
 }
 function Test-Tweak($T) {
+    if ($T.Test) { return [bool](& $T.Test) }
     foreach ($op in $T.Ops) {
         $v = Get-RegValue $op[0] $op[1]
         if ($null -eq $v -or "$v" -ne "$($op[2])") { return $false }
@@ -310,6 +330,7 @@ function Test-Tweak($T) {
 }
 function Set-Tweak($T, [bool]$On) {
     if ($T.Admin -and -not $IsAdmin) { Log "Skipped '$($T.Name)' (needs admin)"; return }
+    if ($T.Apply) { & $T.Apply $On; Log ("{0} - {1}" -f $T.Name, $(if ($On) { 'ON' } else { 'back to Windows default' })); return }
     foreach ($op in $T.Ops) {
         $path, $name, $onV, $offV = $op
         if ($On) {

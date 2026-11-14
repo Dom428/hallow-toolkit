@@ -225,3 +225,92 @@ function Stop-GameSession {
     if ([datetime]::TryParse("$($g.Started)", [ref]$d)) { $m = [int]((Get-Date) - $d).TotalMinutes; Log ("Session length: {0}h {1:D2}m" -f [int][math]::Floor($m / 60), ($m % 60)) }
     $s.GameSession = $null; Save-Settings $s
 }
+
+# ================================================================ PRIVACY: camera / mic / location history
+# Windows records when each app last used these in the CapabilityAccessManager consent store (per user). Read-only.
+function Get-DeviceAccessHistory {
+    $root = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore'
+    $caps = [ordered]@{ webcam = 'Camera'; microphone = 'Microphone'; location = 'Location' }
+    foreach ($cap in $caps.Keys) {
+        $base = Join-Path $root $cap
+        if (-not (Test-Path $base)) { continue }
+        $keys = @(Get-ChildItem $base -ErrorAction SilentlyContinue | Where-Object PSChildName -ne 'NonPackaged')
+        if (Test-Path "$base\NonPackaged") { $keys += @(Get-ChildItem "$base\NonPackaged" -ErrorAction SilentlyContinue) }
+        foreach ($k in $keys) {
+            $start = [int64]($k.GetValue('LastUsedTimeStart', 0)); $stop = [int64]($k.GetValue('LastUsedTimeStop', 0))
+            if ($start -le 0) { continue }
+            $id = $k.PSChildName
+            if ($k.PSParentPath -match 'NonPackaged$') { $path = $id -replace '#', '\'; $name = [IO.Path]::GetFileNameWithoutExtension($path) }
+            else { $path = $id; $name = ($id -split '_')[0] -replace '^Microsoft\.(Windows)?', '' }
+            [pscustomobject]@{
+                Device = $caps[$cap]; App = $name; Path = $path
+                Last = [datetime]::FromFileTime($start); InUse = ($stop -eq 0 -or $stop -lt $start)
+                Seconds = $(if ($stop -gt $start) { [int](($stop - $start) / 1e7) } else { 0 })
+            }
+        }
+    }
+}
+
+# ================================================================ PRIVACY CLEAN
+function Invoke-PrivacyClean {
+    Log '===== PRIVACY CLEAN ====='
+    $recent = [Environment]::GetFolderPath('Recent')
+    $n = @(Get-ChildItem $recent -File -Force -ErrorAction SilentlyContinue).Count
+    Get-ChildItem $recent -File -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    Log "Recent files list - cleared $n entries (the files themselves are untouched)"
+    $j = 0
+    foreach ($sub in 'AutomaticDestinations', 'CustomDestinations') {
+        $p = Join-Path $recent $sub
+        $items = @(Get-ChildItem $p -File -Force -ErrorAction SilentlyContinue); $j += $items.Count
+        $items | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
+    Log "Jump lists (taskbar right-click history) - cleared $j"
+    $exp = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer'
+    foreach ($k in 'WordWheelQuery', 'TypedPaths', 'RunMRU') {
+        if (Test-Path "$exp\$k") {
+            $props = (Get-Item "$exp\$k").Property
+            foreach ($v in $props) { Remove-ItemProperty "$exp\$k" -Name $v -ErrorAction SilentlyContinue }
+        }
+    }
+    Log 'File Explorer search box, address bar and Run box history - cleared'
+    try {
+        $ok = [Windows.ApplicationModel.DataTransfer.Clipboard, Windows.ApplicationModel.DataTransfer, ContentType = WindowsRuntime]::ClearHistory()
+        Log ("Clipboard history - {0}" -f $(if ($ok) { 'cleared (pinned clips are kept)' } else { 'could not clear' }))
+    } catch { try { [System.Windows.Forms.Clipboard]::Clear(); Log 'Clipboard - cleared' } catch { Log 'Clipboard - skipped' } }
+    Log 'Done. Quick Access in File Explorer refreshes after the next Explorer restart.'
+}
+
+# ================================================================ SHARE YOUR SETUP (export / import)
+$ShareableSettings = 'BoostApps', 'AutoBoost', 'ReopenAfterGame', 'PanicHotkey', 'AutoUpdate', 'RecordSessions'
+
+function Export-HallowSetup([string]$File) {
+    $s = Get-Settings
+    $out = [ordered]@{ HallowSetup = 1; From = "Hallow Toolkit v$AppVersion"; Created = (Get-Date).ToString('yyyy-MM-dd HH:mm'); Settings = [ordered]@{}; TweaksOn = @() }
+    foreach ($n in $ShareableSettings) { if ($s.PSObject.Properties.Name -contains $n) { $out.Settings[$n] = $s.$n } }
+    $out.TweaksOn = @($Tweaks | Where-Object { Test-Tweak $_ } | ForEach-Object { $_.Id })
+    $out | ConvertTo-Json -Depth 5 | Set-Content $File -Encoding UTF8
+    Log ("Saved your setup to {0}: {1} tweaks on, Boost list: {2}" -f $File, $out.TweaksOn.Count, (@($s.BoostApps) -join ', '))
+}
+
+# Returns a plan (what would change) without changing anything.
+function Read-HallowSetup([string]$File) {
+    $j = Get-Content $File -Raw | ConvertFrom-Json
+    if (-not $j.HallowSetup) { throw 'That file is not a Hallow Toolkit setup file.' }
+    $turnOn = @(); $turnOff = @()
+    foreach ($t in $Tweaks) {
+        $want = @($j.TweaksOn) -contains $t.Id; $now = Test-Tweak $t
+        if ($want -and -not $now) { $turnOn += $t } elseif ($now -and -not $want) { $turnOff += $t }
+    }
+    [pscustomobject]@{ Source = $j; TurnOn = $turnOn; TurnOff = $turnOff }
+}
+
+function Import-HallowSetup($Plan, [bool]$AlsoTurnOff) {
+    $s = Get-Settings
+    foreach ($p in $Plan.Source.Settings.PSObject.Properties) {
+        if ($ShareableSettings -contains $p.Name) { $s | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force }
+    }
+    Save-Settings $s
+    Log ("Toolkit settings imported (Boost list: {0})" -f (@($s.BoostApps) -join ', '))
+    foreach ($t in $Plan.TurnOn) { Set-Tweak $t $true }
+    if ($AlsoTurnOff) { foreach ($t in $Plan.TurnOff) { Set-Tweak $t $false } }
+}
