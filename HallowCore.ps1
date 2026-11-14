@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '3.1'
+$AppVersion = '3.2'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -106,17 +106,19 @@ function Get-Settings {
         PanicHotkey     = $true
         AutoUpdate      = $true
         LastUpdateCheck = ''
+        GameSession     = $null
+        LastBios        = ''
     }
     if (Test-Path $SettingsFile) {
         try {
             $f = Get-Content $SettingsFile -Raw | ConvertFrom-Json
-            foreach ($p in $f.PSObject.Properties) { $s.($p.Name) = $p.Value }
+            foreach ($p in $f.PSObject.Properties) { $s | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force }
         } catch { }
     }
     $s.BoostApps = @($s.BoostApps)
     $s
 }
-function Save-Settings($Settings) { $Settings | ConvertTo-Json | Set-Content $SettingsFile -Encoding UTF8 }
+function Save-Settings($Settings) { $Settings | ConvertTo-Json -Depth 5 | Set-Content $SettingsFile -Encoding UTF8 }
 
 # ================================================================ TUNE-UP
 
@@ -1208,3 +1210,5 @@ function Remove-LeftoverItems($Items) {
 # v3 extras
 . (Join-Path $HallowRoot 'HallowExtras.ps1')
 . (Join-Path $HallowRoot 'HallowUpdates.ps1')
+
+. (Join-Path $HallowRoot 'HallowSystem.ps1')

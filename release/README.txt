@@ -9,6 +9,13 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.2
+- Health tab > System check: BIOS, EXPO, Resizable BAR, Secure Boot, TPM, temps, drives and
+  hardware errors in one colour-coded list. Runs by itself after a BIOS update.
+- Tune-up tab > App updates: see which apps are out of date, tick them, update silently.
+- Gaming tab > Game session: one click closes your Boost apps, switches to High performance and
+  pauses Windows Update; End puts it all back. Also in the tray menu.
+
 WHAT'S NEW IN 3.1
 - Drivers tab: newest motherboard drivers + BIOS straight from the maker (ASUS fully automatic;
   MSI/Gigabyte/ASRock open the support page), plus Windows Update drivers for any brand.

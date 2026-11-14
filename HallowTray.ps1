@@ -75,8 +75,16 @@ $miClean.Add_Click({
     Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-Mode', 'Quick', '-NoRecycleBin')
     Notify 'Quick Clean-up is running in the background.'
 })
+$miSession = New-Object System.Windows.Forms.ToolStripMenuItem('Game session')
+$miSession.Checked = [bool](Get-GameSession)
+$miSession.Add_Click({
+    if (Get-GameSession) { Stop-GameSession; Notify 'Game session ended - power plan, updates and apps are back to normal.' }
+    else { Start-GameSession; Notify 'Game session on - Boost apps closed, High performance power. Click again when done.' }
+    $miSession.Checked = [bool](Get-GameSession)
+})
+[void]$menu.Items.Add($miSession)
 [void]$menu.Items.Add('-')
-$miBoost = New-Object System.Windows.Forms.ToolStripMenuItem('Auto Game Boost')
+$miBoost =New-Object System.Windows.Forms.ToolStripMenuItem('Auto Game Boost')
 $miBoost.CheckOnClick = $true; $miBoost.Checked = [bool]$settings.AutoBoost
 $miBoost.Add_Click({ $s = Get-Settings; $s.AutoBoost = $miBoost.Checked; Save-Settings $s })
 [void]$menu.Items.Add($miBoost)

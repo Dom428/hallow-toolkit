@@ -258,6 +258,46 @@ Add-Section $f 'Updates & repair'
 Add-Tool $f 'Update all apps' 'winget upgrade --all (new window)' { Invoke-UpdateApps } | Out-Null
 Add-Tool $f 'Unblock Windows updates' 'Remove version pin, open Windows Update' { Invoke-UnblockWindowsUpdates } | Out-Null
 Add-Tool $f 'Repair Windows files' 'DISM + SFC (new window, 10-30 min)' { Invoke-RepairWindows } | Out-Null
+Add-Section $f 'App updates (checked each time the toolkit opens)'
+Add-Tool $f 'Check app updates' 'Apps with a newer version (winget)' { Start-AppUpdateCheck } -Primary | Out-Null
+Add-Tool $f 'Update ticked apps' 'Silent installs, one at a time' { Install-AppUpdates } | Out-Null
+Add-Tool $f 'Tick all / none' 'Toggle every app in the list' {
+    $all = @($appUpList.Items | Where-Object { -not $_.Checked }).Count -gt 0
+    foreach ($i in $appUpList.Items) { $i.Checked = $all }
+} | Out-Null
+$appUpList = New-DarkList $f @(@('App', 300), @('Id', 250), @('Installed', 150), @('New version', 150)) 860 150 $true
+$f.SetFlowBreak($appUpList, $true)
+$script:AppQuiet = $false
+function Start-AppUpdateCheck([switch]$Quiet) {
+    $appUpList.Items.Clear(); $script:AppQuiet = [bool]$Quiet
+    Start-Background 'App update check' $WingetListWork @() {
+        param($out)
+        $first = @($out)[0]
+        if ($first -and $first.Error) { if (-not $script:AppQuiet) { Log $first.Error }; return }
+        $n = 0
+        foreach ($a in $out) {
+            if (-not $a.Id) { continue }
+            $li = New-Object System.Windows.Forms.ListViewItem("$($a.Name)")
+            foreach ($v in $a.Id, $a.Version, $a.Available) { [void]$li.SubItems.Add("$v") }
+            $li.Tag = $a; $li.Checked = $true; $li.ForeColor = $C.Accent
+            [void]$appUpList.Items.Add($li); $n++
+        }
+        if ($n) { Log "$n app update(s) available - Tune-up tab > App updates: $(@($out | Where-Object Id | ForEach-Object Name) -join ', ')" }
+        elseif (-not $script:AppQuiet) { Log 'All your apps are up to date.' }
+    }
+}
+function Install-AppUpdates {
+    $items = @($appUpList.CheckedItems | ForEach-Object { $_.Tag })
+    if (-not $items) { Log 'Tick at least one app first (or click Check app updates).'; return }
+    $list = ($items | ForEach-Object { "  - $($_.Name)  $($_.Version) > $($_.Available)" }) -join "`n"
+    if (-not (Confirm-Action "Update these apps?`n`n$list`n`nClose them first if they are open. Some installers show a UAC prompt - click Yes on it.")) { return }
+    Start-Background "Updating $($items.Count) app(s)" $WingetUpgradeWork @(, [object[]]$items) {
+        param($out)
+        foreach ($l in $out) { Log "$l" }
+        Start-AppUpdateCheck -Quiet
+    }
+}
+[void]$script:AfterShown.Add({ Start-AppUpdateCheck -Quiet })
 Add-Section $f 'Automatic'
 Add-Tool $f 'Weekly auto clean-up' 'Turn on / off (Sundays 3 AM)' { Invoke-ToggleWeeklyClean } | Out-Null
 Add-Tool $f 'Startup apps' 'Choose what launches with Windows' { Start-Process 'ms-settings:startupapps'; Log 'Opened Startup apps.' } | Out-Null
@@ -376,6 +416,46 @@ $monTimer.Start()
 
 # ================================================================ PAGE: HEALTH
 $f = Add-Page 'Health' ([char]0x2665) 'Find out why the PC crashes and check RAM, drives and drivers'
+Add-Section $f 'System check (run it after a BIOS update, EXPO change or new driver)'
+Add-Tool $f 'Run system check' 'BIOS, EXPO, ReBAR, Secure Boot, temps, errors' { Start-SystemCheck } -Primary | Out-Null
+Add-Tool $f 'Copy results' 'Paste into Discord or a forum' {
+    if (-not $chkList.Items.Count) { Log 'Run the system check first.'; return }
+    $txt = ($chkList.Items | ForEach-Object { "[{0}] {1}: {2}{3}" -f $_.SubItems[2].Text, $_.Text, $_.SubItems[1].Text, $(if ($_.SubItems[3].Text) { "  - $($_.SubItems[3].Text)" } else { '' }) }) -join "`r`n"
+    [System.Windows.Forms.Clipboard]::SetText("Hallow Toolkit system check $(Get-Date -Format 'yyyy-MM-dd HH:mm')`r`n$txt"); Log 'System check copied to the clipboard.'
+} | Out-Null
+$chkList = New-DarkList $f @(@('Check', 200), @('Result', 270), @('Status', 60), @('What to do', 326)) 860 300 $false
+$chkList.ShowItemToolTips = $true; $f.SetFlowBreak($chkList, $true)
+function Start-SystemCheck {
+    $chkList.Items.Clear()
+    Start-Background 'System check' $SystemCheckWork @() {
+        param($out)
+        $fix = @(); $look = @()
+        foreach ($r in $out) {
+            if (-not $r.Check) { continue }
+            $li = New-Object System.Windows.Forms.ListViewItem("$($r.Check)")
+            $mark = switch ($r.Verdict) { 'Good' { 'OK' } 'Warn' { 'CHECK' } 'Bad' { 'FIX' } default { 'info' } }
+            foreach ($v in $r.Value, $mark, $r.Advice) { [void]$li.SubItems.Add("$v") }
+            $li.ToolTipText = "$($r.Advice)"; $li.Tag = $r
+            $li.ForeColor = switch ($r.Verdict) { 'Good' { $C.Good } 'Warn' { $C.Warn } 'Bad' { $C.Bad } default { $C.Muted } }
+            [void]$chkList.Items.Add($li)
+            if ($r.Verdict -eq 'Bad') { $fix += $r } elseif ($r.Verdict -eq 'Warn') { $look += $r }
+        }
+        if (-not $fix -and -not $look) { Log 'System check: everything looks good.' }
+        else {
+            Log ("System check: {0} to fix, {1} to look at." -f $fix.Count, $look.Count)
+            foreach ($r in $fix + $look) { Log ("  {0}: {1} - {2}" -f $r.Check, $r.Value, $r.Advice) }
+        }
+    }
+}
+# BIOS changed since last time (e.g. you just flashed it)? Run the check so you notice if EXPO got reset.
+[void]$script:AfterShown.Add({
+    $s = Get-Settings; $now = "$((Get-CimInstance Win32_BIOS).SMBIOSBIOSVersion)".Trim()
+    if ($s.LastBios -and $s.LastBios -ne $now) {
+        Log "BIOS changed from $($s.LastBios) to $now - running a system check (BIOS updates usually turn EXPO off)."
+        Show-Page 'Health'; Start-SystemCheck
+    }
+    if ($s.LastBios -ne $now) { $s.LastBios = $now; Save-Settings $s }
+})
 Add-Section $f 'Crashes'
 Add-Tool $f 'Crash detective' 'What caused each crash, in plain English' { Invoke-CrashDetective } -Primary | Out-Null
 Add-Tool $f 'Reliability history' 'Windows crash timeline' { Start-Process perfmon.exe '/rel'; Log 'Opened Reliability history.' } | Out-Null
@@ -394,6 +474,22 @@ Add-Tool $f 'Optional driver updates' 'From Windows Update' { Start-Process 'ms-
 
 # ================================================================ PAGE: GAMING
 $f = Add-Page 'Gaming' ([char]0x25B6) 'Free up the PC before you play'
+Add-Section $f 'Game session (one click before you play, one after)'
+$script:SessionNote = Add-Note $f ''
+function Update-SessionNote {
+    $g = Get-GameSession
+    if ($g) {
+        $d = [datetime]::MinValue; [void][datetime]::TryParse("$($g.Started)", [ref]$d)
+        $script:SessionNote.Text = "ON since {0:HH:mm} - {1} app(s) closed, High performance{2}. Click End game session when you are done." -f $d, @($g.Reopen).Count, $(if ($g.PausedWU) { ', Windows Update paused' } else { '' })
+        $script:SessionNote.ForeColor = $C.Accent
+    } else {
+        $script:SessionNote.Text = 'Off. Start closes your Auto Boost apps (list below), switches to High performance and pauses Windows Update. End puts it all back.'
+        $script:SessionNote.ForeColor = $C.Muted
+    }
+}
+Add-Tool $f 'Start game session' 'Close Boost apps, max power, pause updates' { Start-GameSession; Update-SessionNote; Update-AppList } -Primary | Out-Null
+Add-Tool $f 'End game session' 'Put everything back the way it was' { Stop-GameSession; Update-SessionNote } | Out-Null
+Update-SessionNote
 Add-Section $f 'Boost'
 Add-Tool $f 'Gaming tweaks' 'Game Mode + GPU scheduling on' { Invoke-GamingTweaks } -Primary | Out-Null
 Add-Tool $f 'Power: Balanced' 'Best for Ryzen 7000 (recommended)' { Set-PowerPlan 'SCHEME_BALANCED' } | Out-Null
