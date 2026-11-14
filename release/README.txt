@@ -9,6 +9,14 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.4
+- System check now checks every monitor: plugged into the graphics card (not the motherboard)
+  and running at its fastest refresh rate.
+- Gaming tab: pin your games to the graphics card, a PBO + Curve Optimizer BIOS guide for Ryzen,
+  and the NVIDIA shader cache size tip.
+- Tweaks > Performance: optimizations for windowed games, and stop uploading Windows updates to
+  other PCs.
+
 WHAT'S NEW IN 3.3 (3.3.1: fixes Tweaks switches that change a single setting - they now apply and show correctly)
 - Tweaks tab: location, online speech and typing personalization off; clipboard history; seconds
   on the clock; taskbar clean-up (Task View, search icon, Start on the left, Widgets); Edge stops

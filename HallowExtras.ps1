@@ -302,7 +302,10 @@ $Tweaks = @(
     @{ Id = 'searchicon'; Group = 'Taskbar'; Name = 'Search as a small icon (not a big box)'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Search', 'SearchboxTaskbarMode', 1, 2)) },
     @{ Id = 'startleft'; Group = 'Taskbar'; Name = 'Start button on the left'; Admin = $false; Ops = @(@('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced', 'TaskbarAl', 0, 1)) },
     @{ Id = 'widgets'; Group = 'Taskbar'; Name = 'Remove Widgets / news (admin)'; Admin = $true; Ops = @(@('HKLM:\SOFTWARE\Policies\Microsoft\Dsh', 'AllowNewsAndInterests', 0, $null)) },
-    @{ Id = 'edgebg'; Group = 'Performance'; Name = 'Edge stops running after you close it (admin)'; Admin = $true; Ops = @(
+    @{ Id = 'windowed'; Group = 'Performance'; Name = 'Optimizations for windowed games (lower lag in borderless)'; Admin = $false; Ops = @()
+        Test = { (Get-DxGlobal) -match 'SwapEffectUpgradeEnable=1' }
+        Apply = { param($On) Set-DxGlobalFlag 'SwapEffectUpgradeEnable' $(if ($On) { '1' } else { '' }) } },
+    @{ Id = 'doupload'; Group = 'Performance'; Name = 'Stop uploading Windows updates to other PCs (admin)'; Admin = $true; Ops = @(@('HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization', 'DODownloadMode', 0, $null)) },    @{ Id = 'edgebg'; Group = 'Performance'; Name = 'Edge stops running after you close it (admin)'; Admin = $true; Ops = @(
             @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'BackgroundModeEnabled', 0, $null),
             @('HKLM:\SOFTWARE\Policies\Microsoft\Edge', 'StartupBoostEnabled', 0, $null)) },
     @{ Id = 'faststart'; Group = 'Performance'; Name = 'Fast Startup off - shut down = real fresh start (admin)'; Admin = $true; Ops = @(@('HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power', 'HiberbootEnabled', 0, 1)) },

@@ -496,6 +496,30 @@ Add-Tool $f 'Power: Balanced' 'Best for Ryzen 7000 (recommended)' { Set-PowerPla
 Add-Tool $f 'Power: High performance' 'Max clocks, more heat & power' { Set-PowerPlan 'SCHEME_MIN' } | Out-Null
 Add-Tool $f 'Mouse acceleration' 'Toggle "Enhance pointer precision"' { Set-MouseAccel (-not (Get-MouseAccel)) } | Out-Null
 Add-Tool $f 'Clear shader cache' 'Fixes stutter after driver updates' { Clear-ShaderCache } | Out-Null
+Add-Tool $f 'Shader cache size' 'Bigger NVIDIA cache = less stutter' { Show-ShaderCacheTip } | Out-Null
+Add-Tool $f 'PBO + Curve Optimizer' 'Step-by-step BIOS guide for Ryzen' { Show-PboGuide } | Out-Null
+Add-Section $f 'Games on the graphics card (stops Windows using the weak CPU graphics)'
+Add-Tool $f 'Find my games' 'Lists each game and its GPU setting' {
+    $gpuList.Items.Clear()
+    $all = @(Get-GameExes)
+    foreach ($g in $all) {
+        $li = New-Object System.Windows.Forms.ListViewItem($g.Game)
+        [void]$li.SubItems.Add($g.Exe); [void]$li.SubItems.Add($(if ($g.Pinned) { 'Graphics card' } else { 'Let Windows decide' }))
+        $li.Tag = $g; $li.ToolTipText = $g.Path; $li.Checked = -not $g.Pinned
+        $li.ForeColor = $(if ($g.Pinned) { $C.Good } else { $C.Text })
+        [void]$gpuList.Items.Add($li)
+    }
+    $todo = @($all | Where-Object { -not $_.Pinned }).Count
+    Log ("Found {0} game program(s); {1} not pinned to the graphics card yet{2}." -f $all.Count, $todo, $(if ($todo) { ' - they are ticked, click Pin ticked games' } else { '' }))
+} -Primary | Out-Null
+Add-Tool $f 'Pin ticked games' 'Always use the graphics card' {
+    $paths = @($gpuList.CheckedItems | ForEach-Object { $_.Tag.Path })
+    if (-not $paths) { Log 'Click Find my games, then tick the ones to pin.'; return }
+    Set-GameGpu $paths
+    foreach ($i in $gpuList.CheckedItems) { $i.SubItems[2].Text = 'Graphics card'; $i.ForeColor = $C.Good; $i.Checked = $false }
+} | Out-Null
+$gpuList = New-DarkList $f @(@('Game', 300), @('Program', 330), @('Runs on', 220)) 860 170 $true
+$gpuList.ShowItemToolTips = $true; $f.SetFlowBreak($gpuList, $true)
 Add-Section $f 'Close background apps (tick, then Close selected)'
 $appList = New-Object System.Windows.Forms.CheckedListBox
 $appList.Size = New-Object System.Drawing.Size(566, 214); $appList.CheckOnClick = $true

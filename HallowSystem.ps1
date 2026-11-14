@@ -49,6 +49,19 @@ $SystemCheckWork = {
         Row 'Graphics card' ("{0}  (driver {1})" -f $vc.Name, $vc.DriverVersion) 'Info' 'Resizable BAR and GPU temp need an NVIDIA card to check here'
     }
 
+    # --- Monitors: plugged into the right GPU, running at full refresh rate?
+    try {
+        $dgpu = @(Get-CimInstance Win32_VideoController | Where-Object { $_.Name -match 'NVIDIA|Radeon RX|Radeon Pro|Arc' }).Count -gt 0
+        foreach ($sc in [HallowDisplay]::Get()) {
+            $who = $(if ($sc.Primary) { 'Main monitor' } else { 'Other monitor' })
+            $igpu = $sc.Adapter -match '^AMD Radeon(\(TM\))? Graphics$|Intel.*(UHD|Iris|HD Graphics)'
+            if ($igpu -and $dgpu) { Row "$who - plugged into" $sc.Adapter 'Bad' 'Move the cable to the graphics card ports (lower on the back of the PC) - games run on the weak CPU graphics this way' }
+            else { Row "$who - plugged into" $sc.Adapter 'Good' 'Right ports - the graphics card drives this screen' }
+            $res = "{0}x{1} at {2} Hz" -f $sc.Width, $sc.Height, $sc.Hz
+            if ($sc.MaxHz -gt $sc.Hz + 1) { Row "$who - refresh rate" "$res (can do $($sc.MaxHz) Hz)" 'Bad' "Settings > Display > Advanced display > Choose a refresh rate = $($sc.MaxHz) Hz" }
+            else { Row "$who - refresh rate" $res 'Good' 'Running at its fastest refresh rate' }
+        }
+    } catch { }
     # --- CPU
     $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1
     $ct = $null
