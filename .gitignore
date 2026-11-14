@@ -1,0 +1,12 @@
+# Only the toolkit itself is tracked - logs, settings, backups and compiled helpers stay local.
+*
+!*/
+!*.ps1
+!*.ico
+!*.bat
+!README.md
+!.gitignore
+!release/**
+bin/
+logs/
+backups/

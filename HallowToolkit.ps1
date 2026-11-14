@@ -1,0 +1,769 @@
+﻿<#
+  Hallow Toolkit - tune-up, monitor, health, gaming, games, network, storage and quick tools for this PC.
+  Double-click "Hallow Toolkit.bat" (or the Desktop shortcut) and click Yes on the admin prompt.
+
+  Headless modes:
+    -Mode Report   print a health report
+    -Mode Quick    run the Quick Clean-up (add -NoRecycleBin to keep the Recycle Bin)
+    -Mode Crash    print the crash detective report
+#>
+param(
+    [ValidateSet('Gui', 'Report', 'Quick', 'Crash', 'Backup')]
+    [string]$Mode = 'Gui',
+    [switch]$NoRecycleBin,
+    [string]$StartPage = 'Tune-up'
+)
+
+$ErrorActionPreference = 'Continue'
+$script:LogBox = $null
+. (Join-Path $PSScriptRoot 'HallowCore.ps1')
+
+if ($Mode -eq 'Gui' -and -not $IsAdmin -and -not $env:HALLOW_NO_ELEVATE) {
+    try {
+        Start-Process powershell.exe -Verb RunAs -ErrorAction Stop -ArgumentList @(
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`"", '-StartPage', $StartPage)
+        exit
+    } catch { $env:HALLOW_NO_ELEVATE = '1' }
+}
+
+if ($Mode -eq 'Report') { Invoke-HealthReport; return }
+if ($Mode -eq 'Quick') { Invoke-QuickClean (-not $NoRecycleBin); return }
+if ($Mode -eq 'Crash') { Invoke-CrashDetective; return }
+if ($Mode -eq 'Backup') { & $SaveBackupWork (Get-DefaultBackupDir) 5 $false | ForEach-Object { Log "$_" }; return }
+
+# ================================================================ WINDOW
+
+Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+function RGB($r, $g, $b) { [System.Drawing.Color]::FromArgb($r, $g, $b) }
+$C = @{
+    Bg = RGB 18 16 24; Nav = RGB 26 22 34; Panel = RGB 36 31 46; PanelHi = RGB 52 44 66
+    Accent = RGB 255 122 26; Purple = RGB 160 110 255
+    Text = RGB 236 232 244; Muted = RGB 160 152 176; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
+}
+function New-Font([float]$Size, [string]$Style = 'Regular', [string]$Family = 'Segoe UI') { New-Object System.Drawing.Font($Family, $Size, [System.Drawing.FontStyle]$Style) }
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = $AppName
+$form.Size = New-Object System.Drawing.Size(1200, 800)
+$form.MinimumSize = New-Object System.Drawing.Size(1000, 680)
+$form.StartPosition = 'CenterScreen'
+$form.BackColor = $C.Bg
+$form.ForeColor = $C.Text
+$form.Font = New-Font 10
+$iconPath = Join-Path $PSScriptRoot 'hallow.ico'
+if (Test-Path $iconPath) { try { $form.Icon = New-Object System.Drawing.Icon $iconPath } catch { } }
+
+# ---- right side (Fill added first so docked edges win)
+$right = New-Object System.Windows.Forms.Panel
+$right.Dock = 'Fill'
+$right.Padding = New-Object System.Windows.Forms.Padding(20, 16, 20, 16)
+$form.Controls.Add($right)
+
+$pagesHost = New-Object System.Windows.Forms.Panel
+$pagesHost.Dock = 'Fill'
+$right.Controls.Add($pagesHost)
+
+$logWrap = New-Object System.Windows.Forms.Panel
+$logWrap.Dock = 'Bottom'; $logWrap.Height = 210
+$logWrap.Padding = New-Object System.Windows.Forms.Padding(0, 12, 0, 0)
+$right.Controls.Add($logWrap)
+
+$log = New-Object System.Windows.Forms.TextBox
+$log.Multiline = $true; $log.ScrollBars = 'Vertical'; $log.ReadOnly = $true; $log.WordWrap = $true
+$log.BackColor = $C.Panel; $log.ForeColor = $C.Text; $log.BorderStyle = 'None'
+$log.Font = New-Font 9.5 'Regular' 'Consolas'; $log.Dock = 'Fill'
+$logWrap.Controls.Add($log)
+$logTitle = New-Object System.Windows.Forms.Label
+$logTitle.Text = 'ACTIVITY'; $logTitle.Dock = 'Top'; $logTitle.Height = 22; $logTitle.ForeColor = $C.Muted; $logTitle.Font = New-Font 8.5 'Bold'
+$logWrap.Controls.Add($logTitle)
+$script:LogBox = $log
+
+# ---- left navigation
+$nav = New-Object System.Windows.Forms.Panel
+$nav.Dock = 'Left'; $nav.Width = 220; $nav.BackColor = $C.Nav
+$form.Controls.Add($nav)
+
+$brand = New-Object System.Windows.Forms.Label
+$brand.Text = 'HALLOW'; $brand.Font = New-Font 22 'Bold'; $brand.ForeColor = $C.Accent
+$brand.Location = New-Object System.Drawing.Point(22, 20); $brand.AutoSize = $true
+$nav.Controls.Add($brand)
+$brand2 = New-Object System.Windows.Forms.Label
+$brand2.Text = "TOOLKIT  v$AppVersion"; $brand2.Font = New-Font 9 'Bold'; $brand2.ForeColor = $C.Purple
+$brand2.Location = New-Object System.Drawing.Point(25, 66); $brand2.AutoSize = $true
+$nav.Controls.Add($brand2)
+
+$adminLbl = New-Object System.Windows.Forms.Label
+$adminLbl.AutoSize = $false; $adminLbl.Width = 190; $adminLbl.Height = 40
+$adminLbl.Location = New-Object System.Drawing.Point(22, 715); $adminLbl.Anchor = 'Bottom, Left'
+$adminLbl.Font = New-Font 8.5
+if ($IsAdmin) { $adminLbl.Text = "Admin mode`nAll tools available"; $adminLbl.ForeColor = $C.Good }
+else { $adminLbl.Text = "Limited mode (no admin)`nSome tools are skipped"; $adminLbl.ForeColor = $C.Warn }
+$nav.Controls.Add($adminLbl)
+
+$pages = [ordered]@{}
+$script:PageFlows = @{}
+$navButtons = New-Object System.Collections.Generic.List[System.Windows.Forms.Button]
+$allButtons = New-Object System.Collections.Generic.List[System.Windows.Forms.Button]
+$navY = 104
+$script:CurrentPage = ''
+
+function Show-Page([string]$Name) {
+    foreach ($k in $pages.Keys) { $pages[$k].Visible = ($k -eq $Name) }
+    foreach ($b in $navButtons) {
+        if ($b.Tag -eq $Name) { $b.BackColor = $C.PanelHi; $b.ForeColor = $C.Accent }
+        else { $b.BackColor = $C.Nav; $b.ForeColor = $C.Text }
+    }
+    $script:CurrentPage = $Name
+    if ($Name -eq 'Games' -and -not $script:GamesLoaded) { Update-GameList }
+    if ($Name -eq 'Monitor') { [void]$form.BeginInvoke([Action]{ try { Update-Monitor } catch { } }) }
+    if ($Name -eq 'Uninstall' -and -not $script:ProgramsLoading) { Update-ProgramList }
+    if ($script:PageShowHooks -and $script:PageShowHooks.ContainsKey($Name)) { $h = $script:PageShowHooks[$Name]; $script:PageShowHooks.Remove($Name); & $h }
+}
+
+function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
+    $page = New-Object System.Windows.Forms.Panel
+    $page.Dock = 'Fill'; $page.Visible = $false
+    $pagesHost.Controls.Add($page)
+    $flow = New-Object System.Windows.Forms.FlowLayoutPanel
+    $flow.Dock = 'Fill'; $flow.AutoScroll = $true; $flow.WrapContents = $true
+    $flow.Padding = New-Object System.Windows.Forms.Padding(0, 6, 0, 0)
+    $page.Controls.Add($flow)
+    $head = New-Object System.Windows.Forms.Panel
+    $head.Dock = 'Top'; $head.Height = 64
+    $page.Controls.Add($head)
+    $t = New-Object System.Windows.Forms.Label
+    $t.Text = $Name; $t.Font = New-Font 20 'Bold'; $t.AutoSize = $true; $t.Location = New-Object System.Drawing.Point(0, 0)
+    $head.Controls.Add($t)
+    $s = New-Object System.Windows.Forms.Label
+    $s.Text = $Subtitle; $s.ForeColor = $C.Muted; $s.AutoSize = $true; $s.Location = New-Object System.Drawing.Point(3, 38)
+    $head.Controls.Add($s)
+    $pages[$Name] = $page; $script:PageFlows[$Name] = $flow
+
+    $nb = New-Object System.Windows.Forms.Button
+    $nb.Text = "  $Glyph   $Name"; $nb.Tag = $Name; $nb.UseMnemonic = $false
+    $nb.FlatStyle = 'Flat'; $nb.FlatAppearance.BorderSize = 0; $nb.FlatAppearance.MouseOverBackColor = $C.Panel
+    $nb.TextAlign = 'MiddleLeft'; $nb.Font = New-Font 11 'Bold'
+    $nb.Size = New-Object System.Drawing.Size(220, 40); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
+    $nb.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $nb.Add_Click({ Show-Page $this.Tag })
+    $nav.Controls.Add($nb); $navButtons.Add($nb)
+    $script:navY += 42
+    return $flow
+}
+
+function Add-Section($Flow, [string]$Text) {
+    $l = New-Object System.Windows.Forms.Label
+    $l.UseMnemonic = $false; $l.Text = $Text.ToUpper(); $l.ForeColor = $C.Purple; $l.Font = New-Font 8.5 'Bold'
+    $l.AutoSize = $false; $l.Width = 860; $l.Height = 28; $l.TextAlign = 'BottomLeft'
+    $l.Margin = New-Object System.Windows.Forms.Padding(2, 8, 0, 4)
+    $Flow.Controls.Add($l); $Flow.SetFlowBreak($l, $true)
+}
+
+function Add-Note($Flow, [string]$Text) {
+    $l = New-Object System.Windows.Forms.Label
+    $l.UseMnemonic = $false; $l.Text = $Text; $l.ForeColor = $C.Muted; $l.Font = New-Font 9
+    $l.AutoSize = $false; $l.Width = 860; $l.Height = 22
+    $l.Margin = New-Object System.Windows.Forms.Padding(2, 0, 0, 6)
+    $Flow.Controls.Add($l); $Flow.SetFlowBreak($l, $true)
+    $l
+}
+
+$tips = New-Object System.Windows.Forms.ToolTip
+function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [switch]$Primary, [int]$Width = 278) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.UseMnemonic = $false; $b.Text = "$Title`n$Desc"
+    $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderSize = 0
+    $b.BackColor = $(if ($Primary) { $C.Accent } else { $C.Panel })
+    $b.ForeColor = $(if ($Primary) { RGB 20 12 4 } else { $C.Text })
+    $b.FlatAppearance.MouseOverBackColor = $(if ($Primary) { RGB 255 150 70 } else { $C.PanelHi })
+    $b.Size = New-Object System.Drawing.Size($Width, 64)
+    $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
+    $b.TextAlign = 'MiddleLeft'; $b.Padding = New-Object System.Windows.Forms.Padding(12, 0, 6, 0)
+    $b.Font = New-Font 9.5 $(if ($Primary) { 'Bold' } else { 'Regular' })
+    $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $b.Tag = $Action
+    $tips.SetToolTip($b, $Desc)
+    $b.Add_Click({
+        $act = $this.Tag
+        foreach ($x in $allButtons) { $x.Enabled = $false }
+        $form.UseWaitCursor = $true
+        try { & $act } catch { Log "ERROR: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
+        finally { $form.UseWaitCursor = $false; foreach ($x in $allButtons) { $x.Enabled = $true } }
+    })
+    $Flow.Controls.Add($b); $allButtons.Add($b)
+    $b
+}
+
+# Dark list with optional checkboxes. Columns: @(@('Title', width), ...)
+function New-DarkList($Flow, $Columns, [int]$Width, [int]$Height, [bool]$Checks) {
+    $lv = New-Object System.Windows.Forms.ListView
+    $lv.View = 'Details'; $lv.FullRowSelect = $true; $lv.CheckBoxes = $Checks; $lv.HideSelection = $false
+    $lv.BackColor = $C.Panel; $lv.ForeColor = $C.Text; $lv.BorderStyle = 'None'
+    $lv.Font = New-Font 9.5; $lv.Size = New-Object System.Drawing.Size($Width, $Height)
+    $lv.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
+    foreach ($c in $Columns) { [void]$lv.Columns.Add($c[0], $c[1]) }
+    $lv.OwnerDraw = $true
+    $lv.Add_DrawColumnHeader({
+        param($s, $e)
+        $e.Graphics.FillRectangle((New-Object System.Drawing.SolidBrush $C.PanelHi), $e.Bounds)
+        [System.Windows.Forms.TextRenderer]::DrawText($e.Graphics, $e.Header.Text, (New-Font 8.5 'Bold'),
+            (New-Object System.Drawing.Rectangle(($e.Bounds.X + 6), $e.Bounds.Y, $e.Bounds.Width, $e.Bounds.Height)), $C.Muted, 'VerticalCenter, Left')
+    })
+    $lv.Add_DrawItem({ param($s, $e) $e.DrawDefault = $true })
+    $lv.Add_DrawSubItem({ param($s, $e) $e.DrawDefault = $true })
+    $Flow.Controls.Add($lv)
+    $lv
+}
+
+# ---- background jobs (long tasks run off the UI thread)
+$script:Jobs = New-Object System.Collections.ArrayList
+function Start-Background([string]$Name, [scriptblock]$Work, [object[]]$ArgList, [scriptblock]$OnDone) {
+    $ps = [powershell]::Create()
+    [void]$ps.AddScript($Work.ToString())
+    foreach ($a in $ArgList) { [void]$ps.AddArgument($a) }
+    [void]$script:Jobs.Add([pscustomobject]@{ Name = $Name; PS = $ps; Handle = $ps.BeginInvoke(); Started = Get-Date; OnDone = $OnDone })
+    Log "$Name - running in the background, you can keep using the toolkit..."
+}
+$jobTimer = New-Object System.Windows.Forms.Timer
+$jobTimer.Interval = 500
+$jobTimer.Add_Tick({
+    foreach ($j in @($script:Jobs)) {
+        if (-not $j.Handle.IsCompleted) { continue }
+        $script:Jobs.Remove($j)
+        try {
+            $out = @($j.PS.EndInvoke($j.Handle))
+            if ($j.OnDone) { & $j.OnDone $out } else { foreach ($line in $out) { Log "$line" } }
+        } catch { Log "$($j.Name) failed: $($_.Exception.Message)" }
+        Log ("{0} - finished in {1:N0}s" -f $j.Name, ((Get-Date) - $j.Started).TotalSeconds)
+        $j.PS.Dispose()
+    }
+})
+$jobTimer.Start()
+
+# ================================================================ PAGE: TUNE-UP
+$script:Drives = @(Get-DriveSpace)
+$script:AfterShown = New-Object System.Collections.ArrayList   # slow list-filling runs right after the window appears
+$f = Add-Page 'Tune-up' ([char]0x2726) 'Clean junk, check health and keep Windows up to date'
+Add-Section $f 'One click'
+Add-Tool $f 'Quick Clean-up' 'Temp files, caches, DNS, SSD TRIM' { Invoke-QuickClean $script:recycle.Checked } -Primary | Out-Null
+Add-Tool $f 'Health report' 'Updates, disks, RAM, crashes' { Invoke-HealthReport } | Out-Null
+$script:recycle = New-Object System.Windows.Forms.CheckBox
+$script:recycle.Text = 'Quick Clean-up also empties the Recycle Bin (permanent)'
+$script:recycle.Checked = $true; $script:recycle.AutoSize = $true; $script:recycle.ForeColor = $C.Muted
+$script:recycle.Margin = New-Object System.Windows.Forms.Padding(4, 20, 0, 0)
+$f.Controls.Add($script:recycle); $f.SetFlowBreak($script:recycle, $true)
+Add-Section $f 'Updates & repair'
+Add-Tool $f 'Update all apps' 'winget upgrade --all (new window)' { Invoke-UpdateApps } | Out-Null
+Add-Tool $f 'Unblock Windows updates' 'Remove version pin, open Windows Update' { Invoke-UnblockWindowsUpdates } | Out-Null
+Add-Tool $f 'Repair Windows files' 'DISM + SFC (new window, 10-30 min)' { Invoke-RepairWindows } | Out-Null
+Add-Section $f 'Automatic'
+Add-Tool $f 'Weekly auto clean-up' 'Turn on / off (Sundays 3 AM)' { Invoke-ToggleWeeklyClean } | Out-Null
+Add-Tool $f 'Startup apps' 'Choose what launches with Windows' { Start-Process 'ms-settings:startupapps'; Log 'Opened Startup apps.' } | Out-Null
+
+# ================================================================ PAGE: MONITOR
+$f = Add-Page 'Monitor' ([char]0x25C9) 'Live usage - updates every 2 seconds while this page is open'
+$tiles = @{}
+function Add-Tile($Flow, [string]$Key, [string]$Title) {
+    $p = New-Object System.Windows.Forms.Panel
+    $p.Size = New-Object System.Drawing.Size(278, 118); $p.BackColor = $C.Panel
+    $p.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
+    $t = New-Object System.Windows.Forms.Label
+    $t.Text = $Title.ToUpper(); $t.ForeColor = $C.Muted; $t.Font = New-Font 8.5 'Bold'
+    $t.Location = New-Object System.Drawing.Point(14, 12); $t.AutoSize = $true
+    $v = New-Object System.Windows.Forms.Label
+    $v.Text = '...'; $v.Font = New-Font 22 'Bold'; $v.Location = New-Object System.Drawing.Point(11, 32); $v.AutoSize = $true
+    $sub = New-Object System.Windows.Forms.Label
+    $sub.Text = ''; $sub.ForeColor = $C.Muted; $sub.Font = New-Font 8.5; $sub.Location = New-Object System.Drawing.Point(14, 74); $sub.AutoSize = $true
+    $bar = New-Object System.Windows.Forms.Panel
+    $bar.Location = New-Object System.Drawing.Point(14, 98); $bar.Size = New-Object System.Drawing.Size(250, 6); $bar.BackColor = $C.PanelHi
+    $fill = New-Object System.Windows.Forms.Panel
+    $fill.Location = New-Object System.Drawing.Point(0, 0); $fill.Size = New-Object System.Drawing.Size(0, 6); $fill.BackColor = $C.Accent
+    $bar.Controls.Add($fill)
+    $p.Controls.AddRange(@($t, $v, $sub, $bar))
+    $Flow.Controls.Add($p)
+    $tiles[$Key] = @{ Value = $v; Sub = $sub; Fill = $fill }
+}
+function Set-Tile([string]$Key, [string]$Value, [string]$Sub, [double]$Pct, [double]$WarnAt = 75, [double]$BadAt = 90) {
+    $t = $tiles[$Key]; if (-not $t) { return }
+    $t.Value.Text = $Value; $t.Sub.Text = $Sub
+    $pct = [math]::Max(0, [math]::Min(100, $Pct))
+    $t.Fill.Width = [int](250 * $pct / 100)
+    $t.Fill.BackColor = $(if ($pct -ge $BadAt) { $C.Bad } elseif ($pct -ge $WarnAt) { $C.Warn } else { $C.Accent })
+}
+Add-Section $f 'Performance'
+Add-Tile $f 'cpu' 'CPU load'
+Add-Tile $f 'cputemp' 'CPU temperature'
+Add-Tile $f 'ram' 'Memory'
+Add-Tile $f 'gpu' 'GPU load'
+Add-Tile $f 'gputemp' 'GPU temperature'
+Add-Tile $f 'vram' 'GPU memory'
+Add-Tile $f 'net' 'Network'
+Add-Section $f 'Drives'
+foreach ($d in $script:Drives) { Add-Tile $f ("disk" + $d.Drive) ("Drive {0} {1}" -f $d.Drive, $d.Label) }
+Add-Section $f 'Top memory users'
+$topList = New-Object System.Windows.Forms.Label
+$topList.Font = New-Font 9.5 'Regular' 'Consolas'; $topList.ForeColor = $C.Text; $topList.AutoSize = $true
+$f.Controls.Add($topList)
+
+# performance counters are slow to create, so they are set up the first time the Monitor tab is opened
+$script:cpuCounter = $null; $script:netCat = $null; $script:MonInit = $false
+$netCounters = @{}
+$nvsmi = $NvSmi
+function Initialize-Monitor {
+    if ($script:MonInit) { return }; $script:MonInit = $true
+    try { $script:cpuCounter = New-Object System.Diagnostics.PerformanceCounter('Processor Information', '% Processor Utility', '_Total'); [void]$script:cpuCounter.NextValue() } catch {
+        try { $script:cpuCounter = New-Object System.Diagnostics.PerformanceCounter('Processor', '% Processor Time', '_Total'); [void]$script:cpuCounter.NextValue() } catch { $script:cpuCounter = $null }
+    }
+    try { $script:netCat = New-Object System.Diagnostics.PerformanceCounterCategory('Network Interface') } catch { }
+}
+$script:monTick = 0
+$script:lhmMissSince = $null
+
+function Update-Monitor {
+    Initialize-Monitor
+    if ($cpuCounter) {
+        $cpu = [math]::Min(100, $cpuCounter.NextValue())
+        Set-Tile 'cpu' ('{0:N0}%' -f $cpu) "$env:NUMBER_OF_PROCESSORS threads" $cpu
+    }
+    if (-not $script:lhmMissSince -or ((Get-Date) - $script:lhmMissSince).TotalSeconds -gt 30) {
+        $ct = Get-LhmCpuTemp
+        if ($null -ne $ct) { $script:lhmMissSince = $null; Set-Tile 'cputemp' ("{0:N0} $([char]0xB0)C" -f $ct) 'Ryzen 7000 runs up to 95 C by design' $ct 85 95 }
+        else { $script:lhmMissSince = Get-Date; Set-Tile 'cputemp' 'n/a' 'Tools > Install CPU temp sensor' 0 }
+    }
+    $os = Get-CimInstance Win32_OperatingSystem -Property TotalVisibleMemorySize, FreePhysicalMemory
+    $tot = $os.TotalVisibleMemorySize / 1MB; $used = $tot - $os.FreePhysicalMemory / 1MB
+    Set-Tile 'ram' ('{0:N1} GB' -f $used) ('of {0:N0} GB ({1:N0}%)' -f $tot, (100 * $used / $tot)) (100 * $used / $tot)
+    if ($nvsmi) {
+        $q = & $nvsmi '--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total,power.draw,name' '--format=csv,noheader,nounits' 2>$null | Select-Object -First 1
+        if ($q) {
+            $v = $q -split ',\s*'
+            Set-Tile 'gpu' ("$($v[0])%") ("{0}  {1:N0} W" -f $v[5], [double]$v[4]) ([double]$v[0])
+            Set-Tile 'gputemp' ("$($v[1]) $([char]0xB0)C") 'Under 83 C is normal under load' ([double]$v[1]) 75 83
+            Set-Tile 'vram' ('{0:N1} GB' -f ([double]$v[2] / 1024)) ('of {0:N0} GB' -f ([double]$v[3] / 1024)) (100 * [double]$v[2] / [double]$v[3])
+        }
+    } else { Set-Tile 'gpu' 'n/a' 'NVIDIA driver tools not found' 0 }
+    if ($netCat) {
+        $down = 0; $upl = 0
+        foreach ($inst in $netCat.GetInstanceNames()) {
+            try {
+                if (-not $netCounters.ContainsKey($inst)) {
+                    $netCounters[$inst] = @(
+                        (New-Object System.Diagnostics.PerformanceCounter('Network Interface', 'Bytes Received/sec', $inst)),
+                        (New-Object System.Diagnostics.PerformanceCounter('Network Interface', 'Bytes Sent/sec', $inst)))
+                }
+                $r = $netCounters[$inst][0].NextValue(); $s = $netCounters[$inst][1].NextValue()
+                if ($r -gt $down) { $down = $r }; if ($s -gt $upl) { $upl = $s }
+            } catch { }
+        }
+        Set-Tile 'net' ('{0:N1} Mb/s' -f ($down * 8 / 1MB)) ('down  |  {0:N1} Mb/s up' -f ($upl * 8 / 1MB)) ([math]::Min(100, $down * 8 / 1MB / 10))
+    }
+    if ($script:monTick % 5 -eq 0) {
+        foreach ($d in Get-DriveSpace) {
+            Set-Tile ("disk" + $d.Drive) ('{0:N0} GB free' -f $d.FreeGB) ('of {0:N0} GB ({1}% free)' -f $d.SizeGB, $d.FreePct) (100 - $d.FreePct) 80 88
+        }
+        $topList.Text = (Get-Process | Group-Object ProcessName | ForEach-Object {
+                [pscustomobject]@{ N = $_.Name; MB = ($_.Group | Measure-Object WorkingSet64 -Sum).Sum / 1MB }
+            } | Sort-Object MB -Descending | Select-Object -First 8 | ForEach-Object { '{0,-30} {1,7:N0} MB' -f $_.N, $_.MB }) -join "`r`n"
+    }
+    $script:monTick++
+}
+$monTimer = New-Object System.Windows.Forms.Timer
+$monTimer.Interval = 2000
+$monTimer.Add_Tick({ if ($script:CurrentPage -eq 'Monitor' -and $form.WindowState -ne 'Minimized') { try { Update-Monitor } catch { if (-not $script:MonErrLogged) { $script:MonErrLogged = $true; Log "Monitor error: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" } } } })
+$monTimer.Start()
+
+# ================================================================ PAGE: HEALTH
+$f = Add-Page 'Health' ([char]0x2665) 'Find out why the PC crashes and check RAM, drives and drivers'
+Add-Section $f 'Crashes'
+Add-Tool $f 'Crash detective' 'What caused each crash, in plain English' { Invoke-CrashDetective } -Primary | Out-Null
+Add-Tool $f 'Reliability history' 'Windows crash timeline' { Start-Process perfmon.exe '/rel'; Log 'Opened Reliability history.' } | Out-Null
+Add-Section $f 'Memory (RAM)'
+Add-Tool $f 'Memory info' 'Speed, EXPO status, last test result' { Invoke-MemoryInfo } | Out-Null
+Add-Tool $f 'Run memory test' 'Windows Memory Diagnostic (on restart)' { Invoke-MemoryTest } | Out-Null
+Add-Section $f 'Drives & drivers'
+Add-Tool $f 'Drive health' 'SSD wear, temperature, errors' { Invoke-SsdHealth } | Out-Null
+Add-Tool $f 'Driver check' 'GPU, network, audio driver ages' { Invoke-DriverCheck } | Out-Null
+Add-Tool $f 'Get NVIDIA driver' 'Opens the NVIDIA app or website' {
+    $app = Get-ChildItem 'C:\Program Files\NVIDIA Corporation\NVIDIA app' -Recurse -Filter 'NVIDIA app.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($app) { Start-Process $app.FullName; Log 'Opened the NVIDIA app - go to Drivers.' }
+    else { Start-Process 'https://www.nvidia.com/en-us/geforce/drivers/'; Log 'Opened the NVIDIA driver page.' }
+} | Out-Null
+Add-Tool $f 'Optional driver updates' 'From Windows Update' { Start-Process 'ms-settings:windowsupdate-optionalupdates'; Log 'Opened optional updates.' } | Out-Null
+
+# ================================================================ PAGE: GAMING
+$f = Add-Page 'Gaming' ([char]0x25B6) 'Free up the PC before you play'
+Add-Section $f 'Boost'
+Add-Tool $f 'Gaming tweaks' 'Game Mode + GPU scheduling on' { Invoke-GamingTweaks } -Primary | Out-Null
+Add-Tool $f 'Power: Balanced' 'Best for Ryzen 7000 (recommended)' { Set-PowerPlan 'SCHEME_BALANCED' } | Out-Null
+Add-Tool $f 'Power: High performance' 'Max clocks, more heat & power' { Set-PowerPlan 'SCHEME_MIN' } | Out-Null
+Add-Tool $f 'Mouse acceleration' 'Toggle "Enhance pointer precision"' { Set-MouseAccel (-not (Get-MouseAccel)) } | Out-Null
+Add-Tool $f 'Clear shader cache' 'Fixes stutter after driver updates' { Clear-ShaderCache } | Out-Null
+Add-Section $f 'Close background apps (tick, then Close selected)'
+$appList = New-Object System.Windows.Forms.CheckedListBox
+$appList.Size = New-Object System.Drawing.Size(566, 214); $appList.CheckOnClick = $true
+$appList.BackColor = $C.Panel; $appList.ForeColor = $C.Text; $appList.BorderStyle = 'None'
+$appList.Font = New-Font 10 'Regular' 'Consolas'
+$appList.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
+$f.Controls.Add($appList)
+function Update-AppList {
+    $appList.Items.Clear()
+    $boost = (Get-Settings).BoostApps
+    foreach ($a in Get-ClosableApps) {
+        [void]$appList.Items.Add(('{0,-28} {1,7:N0} MB' -f $a.Name, $a.MB), ($boost -contains $a.Name))
+    }
+}
+function Get-TickedApps { @($appList.CheckedItems | ForEach-Object { ($_ -split '\s+')[0] }) }
+$side = New-Object System.Windows.Forms.FlowLayoutPanel
+$side.FlowDirection = 'TopDown'; $side.Size = New-Object System.Drawing.Size(290, 222); $side.WrapContents = $false
+$f.Controls.Add($side)
+Add-Tool $side 'Refresh list' 'Show apps running now' { Update-AppList; Log "Found $($appList.Items.Count) apps you can close." } | Out-Null
+Add-Tool $side 'Close selected apps' 'Frees RAM and CPU for your game' {
+    $names = Get-TickedApps
+    if (-not $names) { Log 'Tick the apps to close first.'; return }
+    if (Confirm-Action ("Close these apps?`n`n" + ($names -join "`n") + "`n`nUnsaved work in them will be lost.")) { Close-Apps $names | Out-Null; Update-AppList }
+} | Out-Null
+Add-Tool $side 'Save as Auto Boost list' 'Tray app closes these when a game starts' {
+    $s = Get-Settings; $s.BoostApps = @(Get-TickedApps); Save-Settings $s
+    Log ("Auto Game Boost list saved: {0}" -f $(if ($s.BoostApps) { $s.BoostApps -join ', ' } else { '(empty)' }))
+} | Out-Null
+Add-Section $f 'Auto Game Boost + panic key (tray app)'
+Add-Note $f 'The tray app (orange H by the clock) closes your Auto Boost apps when a game starts and reopens them after. Ctrl+Alt+End force-closes a frozen game.' | Out-Null
+Add-Tool $f 'Start tray app' 'Auto Game Boost + panic key' { Start-TrayApp } -Primary | Out-Null
+Add-Tool $f 'Tray app with Windows' 'Turn on / off at startup' { Set-TrayAtStartup (-not (Test-TrayAtStartup)) } | Out-Null
+Add-Tool $f 'Game Mode settings' 'Windows gaming options' { Start-Process 'ms-settings:gaming-gamemode' } | Out-Null
+
+# ================================================================ PAGE: GAMES
+$f = Add-Page 'Games' ([char]0x265C) 'Every installed game, its size and when you last played it'
+$gamesList = New-DarkList $f @(@('Game', 330), @('Store', 70), @('Size', 90), @('Last played', 110), @('Location', 260)) 880 330 $false
+$gamesList.Sorting = 'None'
+$gamesNote = Add-Note $f ''
+function Get-SelectedGame { if ($gamesList.SelectedItems.Count) { $gamesList.SelectedItems[0].Tag } else { Log 'Click a game in the list first.'; $null } }
+function Update-GameList {
+    $script:GamesLoaded = $true
+    $gamesList.Items.Clear()
+    $games = @(Get-SteamGames)
+    $xboxFolders = @()
+    foreach ($root in Get-GameRoots | Where-Object { $_ -notmatch 'steamapps' }) {
+        foreach ($d in Get-ChildItem $root -Directory -ErrorAction SilentlyContinue) {
+            $games += [pscustomobject]@{ Name = $d.Name; Store = $(if ($root -match 'Xbox') { 'Xbox' } elseif ($root -match 'Epic') { 'Epic' } else { 'Other' })
+                Id = $null; Bytes = -1; LastPlayed = $null; Path = $d.FullName }
+            $xboxFolders += $d.FullName
+        }
+    }
+    $script:AllGames = $games
+    Show-Games
+    $gamesNote.Text = "{0} games. Steam sizes shown; Xbox/other folders are being measured..." -f $games.Count
+    if ($xboxFolders) {
+        Start-Background 'Measuring Xbox/other game folders' $XboxSizeWork (, $xboxFolders) {
+            param($out)
+            foreach ($r in $out) { foreach ($g in $script:AllGames) { if ($g.Path -eq $r.Path) { $g.Bytes = $r.Bytes } } }
+            Show-Games
+        }
+    }
+}
+function Show-Games {
+    $gamesList.BeginUpdate(); $gamesList.Items.Clear()
+    # hide tiny add-on folders (e.g. Call of Duty 'DLC / Game Stub' packs) once measured
+    $shown = @($script:AllGames | Where-Object { $_.Bytes -lt 0 -or $_.Bytes -ge 200MB -or $_.Store -eq 'Steam' })
+    foreach ($g in $shown | Sort-Object Bytes -Descending) {
+        $it = New-Object System.Windows.Forms.ListViewItem($g.Name)
+        [void]$it.SubItems.Add($g.Store)
+        [void]$it.SubItems.Add($(if ($g.Bytes -ge 0) { Format-Size $g.Bytes } else { '...' }))
+        [void]$it.SubItems.Add($(if ($g.LastPlayed) { '{0:yyyy-MM-dd}' -f $g.LastPlayed } else { '-' }))
+        [void]$it.SubItems.Add($g.Path)
+        $it.Tag = $g
+        [void]$gamesList.Items.Add($it)
+    }
+    $gamesList.EndUpdate()
+    $sum = ($script:AllGames | Where-Object Bytes -gt 0 | Measure-Object Bytes -Sum).Sum
+    $hidden = $script:AllGames.Count - $shown.Count
+    $gamesNote.Text = "{0} games using {1} in total.{2}" -f $shown.Count, (Format-Size $sum), $(if ($hidden) { " ($hidden small add-on folders hidden)" } else { '' })
+}
+Add-Tool $f 'Play' 'Launch the selected game' {
+    $g = Get-SelectedGame; if (-not $g) { return }
+    if ($g.Store -eq 'Steam') { Start-Process "steam://rungameid/$($g.Id)"; Log "Launching $($g.Name)..." }
+    elseif ($g.Store -eq 'Xbox') { Start-Process 'xbox:'; Log 'Opened the Xbox app - start the game from there.' }
+    else { Start-Process explorer.exe $g.Path }
+} -Primary -Width 210 | Out-Null
+Add-Tool $f 'Uninstall' 'Through Steam / Windows' {
+    $g = Get-SelectedGame; if (-not $g) { return }
+    if ($g.Store -eq 'Steam') { Start-Process "steam://uninstall/$($g.Id)"; Log "Steam will ask to confirm uninstalling $($g.Name)." }
+    else { Start-Process 'ms-settings:appsfeatures'; Log "Find '$($g.Name)' in the list and click Uninstall (or use the Xbox app)." }
+} -Width 210 | Out-Null
+Add-Tool $f 'Open folder' 'Show game files' { $g = Get-SelectedGame; if ($g) { Start-Process explorer.exe $g.Path } } -Width 210 | Out-Null
+Add-Tool $f 'Refresh' 'Rescan installed games' { Update-GameList } -Width 210 | Out-Null
+Add-Note $f 'To move a Steam game between C: and G: - Steam > game > Properties > Installed Files > Move install folder.' | Out-Null
+
+# ================================================================ PAGE: NETWORK
+$f = Add-Page 'Network' ([char]0x2301) 'Speed, ping, DNS and connection fixes'
+Add-Section $f 'Test'
+Add-Tool $f 'Speed test' 'Download + upload (Cloudflare)' { Start-Background 'Speed test' $SpeedTestWork @() } -Primary | Out-Null
+Add-Tool $f 'Ping test' 'Latency, jitter, packet loss' {
+    $gw = $null; $a = Get-MainAdapter
+    if ($a) { $gw = ((Get-NetIPConfiguration -InterfaceIndex $a.ifIndex).IPv4DefaultGateway | Select-Object -First 1).NextHop }
+    $targets = @()
+    if ($gw) { $targets += [pscustomobject]@{ Name = "Router ($gw)"; Host = $gw } }
+    $targets += [pscustomobject]@{ Name = 'Cloudflare (1.1.1.1)'; Host = '1.1.1.1' }
+    $targets += [pscustomobject]@{ Name = 'Google (8.8.8.8)'; Host = '8.8.8.8' }
+    Start-Background 'Ping test' $PingWork (, $targets)
+} | Out-Null
+Add-Tool $f 'Apps using internet' 'Which apps are connected now' { Invoke-WhoIsOnline } | Out-Null
+Add-Tool $f 'My network info' 'Adapter, speed, IP, DNS, VPNs' { Invoke-NetworkInfo } | Out-Null
+Add-Section $f 'Fix'
+Add-Tool $f 'Flush DNS' 'Fixes sites that will not load' { Clear-DnsClientCache; Log 'DNS cache flushed.' } | Out-Null
+Add-Tool $f 'Use Cloudflare DNS' 'Fast, private DNS (1.1.1.1)' { Set-GamingDns $true } | Out-Null
+Add-Tool $f 'Reset DNS to automatic' 'Undo Cloudflare DNS' { Set-GamingDns $false } | Out-Null
+Add-Tool $f 'Reset network' 'Winsock + TCP/IP reset (restart needed)' { Invoke-NetworkReset } | Out-Null
+
+# ================================================================ PAGE: STORAGE
+$f = Add-Page 'Storage' ([char]0x25A4) 'Find and remove what is eating your disk space'
+Add-Section $f 'Where to look'
+$where = New-Object System.Windows.Forms.ComboBox
+$where.DropDownStyle = 'DropDownList'; $where.Width = 566; $where.Font = New-Font 10.5
+$where.BackColor = $C.Panel; $where.ForeColor = $C.Text; $where.FlatStyle = 'Flat'
+$where.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
+foreach ($d in $script:Drives) { [void]$where.Items.Add("$($d.Drive)\") }
+[void]$where.Items.Add($env:USERPROFILE)
+$dl = Join-Path $env:USERPROFILE 'Downloads'; [void]$where.Items.Add($dl)
+$where.SelectedIndex = $where.Items.Count - 2
+$f.Controls.Add($where); $f.SetFlowBreak($where, $true)
+
+$script:ResultRecycle = $true
+function Show-Results([string]$Title, $Items, [bool]$Recycle, [bool]$TickAll) {
+    $resultList.Items.Clear()
+    $script:ResultRecycle = $Recycle
+    $total = 0
+    foreach ($r in @($Items) | Where-Object { $_ } | Sort-Object Bytes -Descending) {
+        $it = New-Object System.Windows.Forms.ListViewItem((Format-Size $r.Bytes))
+        [void]$it.SubItems.Add($r.Path); [void]$it.SubItems.Add([string]$r.Info)
+        $it.Tag = $r.Path; $it.Checked = $TickAll
+        [void]$resultList.Items.Add($it); $total += $r.Bytes
+    }
+    $resultNote.Text = "{0}: {1} item(s), {2} total. {3}" -f $Title, $resultList.Items.Count, (Format-Size $total),
+        $(if ($Recycle) { 'Removing sends them to the Recycle Bin.' } else { 'Removing deletes them permanently (they can be rebuilt).' })
+    Log $resultNote.Text
+}
+
+Add-Tool $f 'Biggest folders' 'Top folders by size' {
+    Start-Background "Folder scan of $($where.SelectedItem)" $SizeScanWork @($where.SelectedItem, 'folders') { param($o) Show-Results 'Biggest folders' ($o | Sort-Object Bytes -Descending | Select-Object -First 25) $true $false }
+} -Primary | Out-Null
+Add-Tool $f 'Huge files (1 GB+)' 'Old installers, videos, ISOs' {
+    Start-Background "Big-file scan of $($where.SelectedItem)" $SizeScanWork @($where.SelectedItem, 'files') { param($o) Show-Results 'Huge files' $o $true $false }
+} | Out-Null
+Add-Tool $f 'Downloads cleaner' 'Installers, archives, old files' {
+    Start-Background 'Downloads scan' $DownloadsScanWork @($dl) { param($o) Show-Results 'Downloads clutter' $o $true $false }
+} | Out-Null
+Add-Tool $f 'Project cleaner' 'node_modules, Unity Library, builds' {
+    Start-Background "Project scan of $($where.SelectedItem)" $ProjectScanWork @($where.SelectedItem) { param($o) Show-Results 'Rebuildable project junk' $o $false $false }
+} | Out-Null
+Add-Tool $f 'Duplicate files' 'Same file saved twice' {
+    Start-Background "Duplicate scan of $($where.SelectedItem)" $DuplicateScanWork @($where.SelectedItem) { param($o) Show-Results 'Duplicate copies (oldest copy is kept)' $o $true $false }
+} | Out-Null
+Add-Tool $f 'Open in Explorer' 'Browse the selected place' { Start-Process explorer.exe $where.SelectedItem } | Out-Null
+
+Add-Section $f 'Results (tick what to remove)'
+$resultList = New-DarkList $f @(@('Size', 90), @('Path', 520), @('Details', 260)) 880 260 $true
+$resultList.Add_DoubleClick({ if ($resultList.SelectedItems.Count) { $p = $resultList.SelectedItems[0].Tag; Start-Process explorer.exe "/select,`"$p`"" } })
+$resultNote = Add-Note $f 'Run a scan above. Double-click a result to show it in Explorer.'
+Add-Tool $f 'Remove ticked' 'Recycle / delete the ticked items' {
+    $paths = @($resultList.CheckedItems | ForEach-Object { $_.Tag })
+    if (-not $paths) { Log 'Tick some results first.'; return }
+    $how = if ($script:ResultRecycle) { 'move to the Recycle Bin' } else { 'PERMANENTLY delete' }
+    if (Confirm-Action ("{0} {1} item(s)?`n`n{2}" -f $how, $paths.Count, (($paths | Select-Object -First 12) -join "`n"))) {
+        Remove-Paths $paths $script:ResultRecycle
+        foreach ($i in @($resultList.CheckedItems)) { if (-not (Test-Path -LiteralPath $i.Tag)) { $resultList.Items.Remove($i) } }
+    }
+} -Primary -Width 210 | Out-Null
+Add-Tool $f 'Tick all' 'Select every result' { foreach ($i in $resultList.Items) { $i.Checked = $true } } -Width 210 | Out-Null
+Add-Tool $f 'Untick all' 'Clear selection' { foreach ($i in $resultList.Items) { $i.Checked = $false } } -Width 210 | Out-Null
+Add-Section $f 'More'
+Add-Tool $f 'Empty Recycle Bin' 'Permanently delete what is in it' {
+    if (Confirm-Action 'Permanently delete everything in the Recycle Bin?') { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Log 'Recycle Bin emptied.' }
+} | Out-Null
+Add-Tool $f 'Windows Disk Cleanup' 'Old updates, thumbnails, etc.' { Start-Process cleanmgr.exe; Log 'Opened Disk Cleanup - tick "Clean up system files" for more.' } | Out-Null
+Add-Tool $f 'Uninstall apps' 'Installed apps list' { Start-Process 'ms-settings:appsfeatures' } | Out-Null
+
+# ================================================================ PAGE: UNINSTALL
+$f = Add-Page 'Uninstall' ([char]0x2716) 'Remove programs and games completely - uninstall, then sweep up the leftovers'
+Add-Section $f '1. Pick a program or game'
+$searchBox = New-Object System.Windows.Forms.TextBox
+$searchBox.Width = 566; $searchBox.Font = New-Font 11; $searchBox.BackColor = $C.Panel; $searchBox.ForeColor = $C.Text; $searchBox.BorderStyle = 'FixedSingle'
+$searchBox.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 8)
+$f.Controls.Add($searchBox)
+$searchHint = New-Object System.Windows.Forms.Label
+$searchHint.Text = 'type to search'; $searchHint.ForeColor = $C.Muted; $searchHint.AutoSize = $true
+$searchHint.Margin = New-Object System.Windows.Forms.Padding(0, 6, 0, 0)
+$f.Controls.Add($searchHint); $f.SetFlowBreak($searchHint, $true)
+$progList = New-DarkList $f @(@('Program', 380), @('Publisher', 220), @('Size', 85), @('Installed', 95), @('Type', 75)) 880 220 $false
+$progNote = Add-Note $f 'Loading installed programs...'
+$script:Programs = @()
+
+function Show-Programs {
+    $q = $searchBox.Text.Trim()
+    $progList.BeginUpdate(); $progList.Items.Clear()
+    foreach ($p in $script:Programs) {
+        if ($q -and $p.Name -notlike "*$q*" -and $p.Publisher -notlike "*$q*") { continue }
+        $it = New-Object System.Windows.Forms.ListViewItem($p.Name)
+        [void]$it.SubItems.Add($p.Publisher)
+        [void]$it.SubItems.Add($(if ($p.Bytes -gt 0) { Format-Size $p.Bytes } else { '-' }))
+        [void]$it.SubItems.Add($(if ($p.Installed) { '{0:yyyy-MM-dd}' -f $p.Installed } else { '-' }))
+        [void]$it.SubItems.Add($p.Type)
+        $it.Tag = $p
+        [void]$progList.Items.Add($it)
+    }
+    $progList.EndUpdate()
+    $progNote.Text = "{0} of {1} programs shown. Click one, then Uninstall (or just Scan leftovers for something already removed)." -f $progList.Items.Count, $script:Programs.Count
+}
+function Update-ProgramList {
+    $script:ProgramsLoading = $true
+    Start-Background 'Reading installed programs' $ProgramListWork @() {
+        param($o)
+        $script:Programs = @($o | Where-Object { $_ } | Sort-Object Name)
+        Show-Programs
+    }
+}
+$searchBox.Add_TextChanged({ Show-Programs })
+function Get-PickedProgram {
+    if ($progList.SelectedItems.Count) { return $progList.SelectedItems[0].Tag }
+    if ($script:UninstallTarget) { return $script:UninstallTarget }
+    Log 'Click a program in the list first.'; $null
+}
+
+Add-Section $f '2. Uninstall, then scan for leftovers'
+$levelPanel = New-Object System.Windows.Forms.FlowLayoutPanel
+$levelPanel.Size = New-Object System.Drawing.Size(880, 34); $levelPanel.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 6)
+$levels = @(
+    @('Safe', 'Safe'),
+    @('Moderate', 'Moderate (recommended)'),
+    @('Advanced', 'Advanced (review carefully)'))
+$script:LevelRadios = @{}
+foreach ($lv in $levels) {
+    $rb = New-Object System.Windows.Forms.RadioButton
+    $rb.Text = $lv[1]; $rb.Tag = $lv[0]; $rb.AutoSize = $true; $rb.ForeColor = $C.Text; $rb.UseMnemonic = $false
+    $rb.Margin = New-Object System.Windows.Forms.Padding(0, 6, 18, 0)
+    if ($lv[0] -eq 'Moderate') { $rb.Checked = $true }
+    $levelPanel.Controls.Add($rb); $script:LevelRadios[$lv[0]] = $rb
+}
+$f.Controls.Add($levelPanel); $f.SetFlowBreak($levelPanel, $true)
+Add-Note $f 'Safe: install + same-name folders.   Moderate: + registry, shortcuts, temp.   Advanced: + similar names, services, tasks.' | Out-Null
+$script:UninstallFlow = $f
+function Get-ScanLevel { foreach ($k in 'Safe', 'Moderate', 'Advanced') { if ($script:LevelRadios[$k].Checked) { return $k } }; 'Moderate' }
+
+function Show-Leftovers([string]$Title, $Items) {
+    $leftList.BeginUpdate(); $leftList.Items.Clear()
+    $total = 0; $ticked = 0
+    foreach ($r in @($Items) | Where-Object { $_ -and $_.Path } | Sort-Object Level, @{ e = { $_.Bytes }; Descending = $true }) {
+        $it = New-Object System.Windows.Forms.ListViewItem($r.Type)
+        [void]$it.SubItems.Add($r.Path)
+        [void]$it.SubItems.Add($(if ($r.Type -in 'Folder', 'File') { Format-Size $r.Bytes } else { '' }))
+        [void]$it.SubItems.Add(("{0}: {1}" -f @('', 'Safe', 'Moderate', 'Advanced')[$r.Level], $r.Why))
+        $it.Tag = $r; $it.Checked = [bool]$r.Tick
+        if ($r.Level -ge 3) { $it.ForeColor = $C.Warn }
+        [void]$leftList.Items.Add($it); $total += $r.Bytes; if ($r.Tick) { $ticked++ }
+    }
+    $leftList.EndUpdate()
+    $leftNote.Text = "{0}: {1} leftover(s), {2}. {3} pre-ticked. Yellow = Advanced finds - check before removing." -f $Title, $leftList.Items.Count, (Format-Size $total), $ticked
+    Log $leftNote.Text
+    if ($leftList.Items.Count -eq 0) { Log 'Nothing left behind - clean uninstall.' }
+    $script:UninstallFlow.ScrollControlIntoView($leftNote)
+}
+
+Add-Tool $f 'Uninstall' 'Runs the official uninstaller' {
+    $p = Get-PickedProgram; if (-not $p) { return }
+    if (-not (Confirm-Action "Uninstall $($p.Name)?`n`nIts own uninstaller will open. Afterwards, click 'Scan leftovers'.")) { return }
+    $script:UninstallTarget = $p
+    Invoke-ProgramUninstall $p
+} -Primary -Width 210 | Out-Null
+Add-Tool $f 'Scan leftovers' 'Find what the uninstaller left' {
+    $p = Get-PickedProgram; if (-not $p) { return }
+    $script:UninstallTarget = $p
+    $others = @($script:Programs | Where-Object { -not [object]::ReferenceEquals($_, $p) -and -not ($_.Name -eq $p.Name -and $_.Version -eq $p.Version) })
+    $still = ($p.Key -and (Test-Path $p.Key) -and $p.InstallLocation -and (Test-Path -LiteralPath $p.InstallLocation)) -or ($p.Type -eq 'Store' -and (Get-AppxPackage | Where-Object PackageFullName -eq $p.Package))
+    if ($still) { Log "Note: $($p.Name) still looks installed - uninstall it first, or the results include its live files." }
+    $lv = Get-ScanLevel
+    Start-Background "$lv leftover scan for $($p.Name)" $LeftoverScanWork @($p, $lv, $others) { param($o) Show-Leftovers "Leftovers of $($script:UninstallTarget.Name) ($(Get-ScanLevel))" $o }
+} -Width 210 | Out-Null
+Add-Tool $f 'Leftover finder' 'Old folders from removed apps' {
+    if (-not $script:Programs) { Log 'Wait for the program list to load first.'; return }
+    $running = @(Get-Process | ForEach-Object { try { $_.Path } catch { } } | Where-Object { $_ } | Select-Object -Unique)
+    Start-Background 'Leftover finder' $OrphanScanWork (@(, $script:Programs) + @(, $running)) { param($o) Show-Leftovers 'Folders from apps that are no longer installed' $o }
+} -Width 210 | Out-Null
+Add-Tool $f 'Refresh list' 'Re-read installed programs' { $searchBox.Text = ''; Update-ProgramList } -Width 210 | Out-Null
+
+Add-Section $f '3. Tick what to remove'
+$leftList = New-DarkList $f @(@('Type', 70), @('Item', 470), @('Size', 80), @('Why', 235)) 880 230 $true
+$leftList.Add_DoubleClick({
+    if (-not $leftList.SelectedItems.Count) { return }
+    $r = $leftList.SelectedItems[0].Tag
+    if ($r.Type -in 'Folder', 'File') { Start-Process explorer.exe "/select,`"$($r.Path)`"" } else { Log "$($r.Type): $($r.Path)" }
+})
+$leftNote = Add-Note $f 'Files and folders go to the Recycle Bin. Registry keys, services and tasks are backed up first.'
+Add-Tool $f 'Remove ticked' 'Recycle files, back up + remove the rest' {
+    $items = @($leftList.CheckedItems | ForEach-Object { $_.Tag })
+    if (-not $items) { Log 'Tick some leftovers first.'; return }
+    $summary = ($items | Group-Object Type | ForEach-Object { "$($_.Count) $($_.Name)(s)" }) -join ', '
+    $adv = @($items | Where-Object Level -ge 3).Count
+    $msg = "Remove $summary?`n`nFiles/folders go to the Recycle Bin. Registry, services and tasks are backed up to the toolkit's backups folder."
+    if ($adv) { $msg += "`n`n$adv of them are Advanced (similar-name) finds - make sure they belong to the removed program." }
+    if (-not (Confirm-Action $msg)) { return }
+    Remove-LeftoverItems $items
+    foreach ($it in @($leftList.CheckedItems)) { if (-not (Test-LeftoverExists $it.Tag)) { $leftList.Items.Remove($it) } }
+} -Primary -Width 210 | Out-Null
+Add-Tool $f 'Tick all' 'Select every leftover' { foreach ($i in $leftList.Items) { $i.Checked = $true } } -Width 210 | Out-Null
+Add-Tool $f 'Untick all' 'Clear selection' { foreach ($i in $leftList.Items) { $i.Checked = $false } } -Width 210 | Out-Null
+Add-Tool $f 'Open backups' 'Restore a registry backup' {
+    $b = Join-Path $HallowRoot 'backups'; New-Item -ItemType Directory -Force $b | Out-Null; Start-Process explorer.exe $b
+} -Width 210 | Out-Null
+
+. (Join-Path $PSScriptRoot 'HallowExtraPages.ps1')
+. (Join-Path $PSScriptRoot 'HallowDriverPage.ps1')
+
+# ================================================================ PAGE: TOOLS
+$f = Add-Page 'Tools' ([char]0x2692) 'Handy Windows tools in one place'
+Add-Section $f 'Info'
+Add-Tool $f 'Copy my PC specs' 'For Discord, forums, support' { Copy-Specs } -Primary | Out-Null
+Add-Tool $f 'Open log folder' 'Every action is logged' { Start-Process explorer.exe $LogDir } | Out-Null
+Add-Tool $f 'Install CPU temp sensor' 'LibreHardwareMonitor (free, winget)' { Install-Lhm } | Out-Null
+Add-Section $f 'Toolkit updates'
+Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
+Add-Tool $f 'Auto update check' 'Turn on / off (checks at launch)' { Switch-AutoUpdate } | Out-Null
+Add-Section $f 'Fixes'
+Add-Tool $f 'Restart Explorer' 'Stuck taskbar or Start menu' { Restart-Explorer } | Out-Null
+Add-Tool $f 'Create restore point' 'Safety net before big changes' { New-RestorePoint } | Out-Null
+Add-Tool $f 'Restart into BIOS' 'For BIOS updates (EZ Flash)' { Restart-ToBios } | Out-Null
+Add-Section $f 'Windows tools'
+$launchers = @(
+    @('Task Manager', 'What is running right now', 'taskmgr.exe', ''),
+    @('Resource Monitor', 'Live per-app network & disk', 'resmon.exe', ''),
+    @('Device Manager', 'Drivers and hardware', 'devmgmt.msc', ''),
+    @('Event Viewer', 'Crash and error logs', 'eventvwr.msc', ''),
+    @('Services', 'Background services', 'services.msc', ''),
+    @('Disk Management', 'Partitions and drives', 'diskmgmt.msc', ''),
+    @('System Properties', 'Restore, performance, PC name', 'sysdm.cpl', ''),
+    @('Windows Update', 'Check for updates', 'ms-settings:windowsupdate', ''),
+    @('Startup apps', 'What launches with Windows', 'ms-settings:startupapps', '')
+)
+foreach ($l in $launchers) {
+    $code = "Start-Process -FilePath '$($l[2])'"
+    if ($l[3]) { $code += " -ArgumentList '$($l[3])'" }
+    $code += "; Log 'Opened $($l[0]).'"
+    Add-Tool $f $l[0] $l[1] ([scriptblock]::Create($code)) | Out-Null
+}
+
+# ---- go
+$form.Add_Shown({
+    if (-not $pages.Contains($StartPage)) { $StartPage = 'Tune-up' }
+    Show-Page $StartPage
+    Log "$AppName v$AppVersion ready. Start with Quick Clean-up, or explore the tabs on the left."
+    [void]$script:AfterShown.Insert(0, { Update-AppList })
+    $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
+    $t.Add_Tick({
+        $this.Stop()
+        foreach ($a in $script:AfterShown) { try { & $a } catch { Log "Startup task failed: $($_.Exception.Message)" }; [System.Windows.Forms.Application]::DoEvents() }
+    })
+    $t.Start()
+})
+$form.Add_FormClosing({ $monTimer.Stop(); $jobTimer.Stop() })
+[void]$form.ShowDialog()
