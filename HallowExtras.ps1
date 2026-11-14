@@ -1,4 +1,4 @@
-﻿<#
+<#
   Hallow Toolkit v3 extras (no window code): game sessions, save backup, server ping, clips, debloat,
   tweaks, startup manager, services, dev toolbox, benchmark, disk map engine, sleep doctor, DNS test.
   Dot-sourced by HallowCore.ps1.
@@ -320,9 +320,11 @@ function Get-RegValue([string]$Path, [string]$Name) {
     $p = Get-ItemProperty -Path $Path -Name $Name -ErrorAction SilentlyContinue
     if ($p) { $p.$Name } else { $null }
 }
+# PowerShell flattens @(@(a,b,c,d)) into one array, so a tweak with a single op arrives flat - wrap it back up.
+function Get-TweakOps($T) { $o = @($T.Ops); if ($o.Count -and $o[0] -is [string]) { ,@(,$o) } else { ,$o } }
 function Test-Tweak($T) {
     if ($T.Test) { return [bool](& $T.Test) }
-    foreach ($op in $T.Ops) {
+    foreach ($op in (Get-TweakOps $T)) {
         $v = Get-RegValue $op[0] $op[1]
         if ($null -eq $v -or "$v" -ne "$($op[2])") { return $false }
     }
@@ -331,7 +333,7 @@ function Test-Tweak($T) {
 function Set-Tweak($T, [bool]$On) {
     if ($T.Admin -and -not $IsAdmin) { Log "Skipped '$($T.Name)' (needs admin)"; return }
     if ($T.Apply) { & $T.Apply $On; Log ("{0} - {1}" -f $T.Name, $(if ($On) { 'ON' } else { 'back to Windows default' })); return }
-    foreach ($op in $T.Ops) {
+    foreach ($op in (Get-TweakOps $T)) {
         $path, $name, $onV, $offV = $op
         if ($On) {
             if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
