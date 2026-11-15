@@ -125,16 +125,50 @@ $hotkey.add_Pressed({
 })
 if (-not $hotkey.Ok) { Log '[tray] Could not register Ctrl+Alt+End (another app uses it).' }
 
+# ---- toolkit update notice (checks GitHub in the background, at most every 12 hours)
+$script:UpdJob = $null; $script:Ticks = 0
+function Start-TrayUpdateCheck {
+    $s = Get-Settings
+    if (-not $s.AutoUpdate -or $script:UpdJob) { return }
+    $last = [datetime]::MinValue; [void][datetime]::TryParse("$($s.LastTrayUpdateCheck)", [ref]$last)
+    if (((Get-Date) - $last).TotalHours -lt 12) { return }
+    $ps = [powershell]::Create(); [void]$ps.AddScript($SelfUpdateCheckWork.ToString()).AddArgument($UpdateRepo)
+    $script:UpdJob = @{ PS = $ps; H = $ps.BeginInvoke() }
+}
+function Complete-TrayUpdateCheck {
+    if (-not $script:UpdJob -or -not $script:UpdJob.H.IsCompleted) { return }
+    try { $r = @($script:UpdJob.PS.EndInvoke($script:UpdJob.H))[0] } catch { $r = $null }
+    $script:UpdJob.PS.Dispose(); $script:UpdJob = $null
+    $s = Get-Settings; $s | Add-Member LastTrayUpdateCheck ((Get-Date).ToString('o')) -Force; Save-Settings $s
+    if ($r -and -not $r.Error -and (Test-NewerVersion $r.Version $AppVersion)) {
+        Notify "Hallow Toolkit v$($r.Version) is out (you have v$AppVersion). Click here to open the toolkit and update."
+    }
+}
+$icon.Add_BalloonTipClicked({ $miOpen.PerformClick() })
+
 # ---- auto game boost loop
-$script:InGame = $null; $script:Closed = @(); $script:Misses = 0
+$script:InGame = $null; $script:Closed = @(); $script:Misses = 0; $script:HotWarned = $false
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 5000
 $timer.Add_Tick({
     try {
+        $script:Ticks++
+        if ($script:Ticks % 720 -eq 1) { Start-TrayUpdateCheck }   # at start, then hourly (the 12-hour limit is inside)
+        Complete-TrayUpdateCheck
         $g = Find-RunningGame
         if ($script:InGame -and $miRecord.Checked) { try { $script:Samples.Add((Get-SessionSample)) } catch { } }
+        # overheat alert while playing (once per game)
+        if ($script:InGame -and -not $script:HotWarned -and $NvSmi) {
+            $gt = $null
+            if ($miRecord.Checked -and $script:Samples.Count) { $gt = $script:Samples[$script:Samples.Count - 1].gtemp }
+            else { $q = & $NvSmi '--query-gpu=temperature.gpu' '--format=csv,noheader,nounits' 2>$null | Select-Object -First 1; if ($q) { $gt = [double]$q } }
+            if ($null -ne $gt -and $gt -ge 85) {
+                $script:HotWarned = $true
+                Notify ("GPU is running hot: {0:N0} C in {1}. Check case fans and dust, or cap your FPS in the game." -f $gt, $script:InGame)
+            }
+        }
         if ($g -and -not $script:InGame) {
-            $script:InGame = $g.Name; $script:Misses = 0
+            $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
             $script:SessStart = Get-Date; $script:Samples = New-Object System.Collections.Generic.List[object]
             $s = Get-Settings
             if ($s.AutoBoost -and $s.BoostApps.Count) {

@@ -9,6 +9,13 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.5
+- Tools tab > Quick fixes: audio, Bluetooth, Start search, Microsoft Store, icons & thumbnails,
+  clock sync and Windows Update reset.
+- Drivers tab: back up all drivers, and remove old driver versions Windows keeps around (often GBs).
+- Tray app: warns if your GPU runs hot while gaming, and tells you when a toolkit update is out.
+- After an auto-update the toolkit shows what's new.
+
 WHAT'S NEW IN 3.4
 - System check now checks every monitor: plugged into the graphics card (not the motherboard)
   and running at its fastest refresh rate.

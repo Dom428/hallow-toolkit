@@ -102,6 +102,36 @@ function Install-WuDrivers {
     Start-Background 'Windows Update driver install' $WuDriverInstallWork @(, [string[]]$ids) $null
 }
 
+Add-Section $f 'Driver backup & old driver cleanup'
+Add-Tool $f 'Back up all drivers' 'Before a BIOS or driver change' {
+    if (-not (Need-Admin 'Backing up drivers')) { return }
+    New-Item -ItemType Directory -Force $DriverBackupRoot | Out-Null
+    Start-Background 'Driver backup' $DriverBackupWork @($DriverBackupRoot) $null
+} -Primary | Out-Null
+Add-Tool $f 'Open backups' 'Documents > Hallow Driver Backups' {
+    New-Item -ItemType Directory -Force $DriverBackupRoot | Out-Null; Start-Process explorer.exe "`"$DriverBackupRoot`""
+} | Out-Null
+Add-Tool $f 'Find old drivers' 'Old versions Windows keeps around' {
+    $oldList.Items.Clear()
+    $items = @(Get-OldDriverPackages | Sort-Object Bytes -Descending)
+    foreach ($it in $items) {
+        $li = New-Object System.Windows.Forms.ListViewItem((Format-Size $it.Bytes))
+        foreach ($v in $it.Inf, $it.Provider, $it.Version, $it.Newer) { [void]$li.SubItems.Add("$v") }
+        $li.Tag = $it; $li.Checked = $true; $li.ToolTipText = $it.Folder
+        [void]$oldList.Items.Add($li)
+    }
+    Log ("Found {0} old driver package(s) using {1}. A newer version of each is installed; ticked ones can go." -f $items.Count, (Format-Size (($items | Measure-Object Bytes -Sum).Sum)))
+} | Out-Null
+$oldList = New-DarkList $f @(@('Size', 80), @('Driver file', 250), @('Maker', 220), @('Old version', 140), @('Newer one', 140)) 860 180 $true
+$oldList.ShowItemToolTips = $true; $f.SetFlowBreak($oldList, $true)
+Add-Tool $f 'Remove ticked old drivers' 'Drivers still in use are kept' {
+    $items = @($oldList.CheckedItems | ForEach-Object { $_.Tag })
+    if (-not $items) { Log 'Click Find old drivers first.'; return }
+    $total = Format-Size (($items | Measure-Object Bytes -Sum).Sum)
+    if (-not (Confirm-Action "Remove $($items.Count) old driver package(s) ($total)?`n`nA newer version of each stays installed, and Windows refuses to remove any that a device still uses. Tip: click Back up all drivers first.`n`nThis can't be undone (except from a backup).")) { return }
+    Remove-OldDriverPackages $items
+    foreach ($i in @($oldList.CheckedItems)) { if (-not (pnputil /enum-drivers 2>$null | Select-String -SimpleMatch "Published Name:     $($i.Tag.Oem)")) { $oldList.Items.Remove($i) } }
+} | Out-Null
 # ================================================================ TOOLKIT SELF-UPDATE
 $script:QuietCheck = $false
 function Start-SelfUpdateCheck([switch]$Quiet) {
@@ -123,11 +153,13 @@ function Start-SelfUpdateCheck([switch]$Quiet) {
 
 function Start-SelfUpdateInstall($Release) {
     if (-not $Release.Url) { Log 'That release has no zip attached - nothing to install.'; return }
+    $script:PendingRelease = $Release
     Start-Background "Downloading v$($Release.Version)" $SelfUpdateDownloadWork @($Release.Url, $Release.Sha256) {
         param($out)
         $d = @($out)[0]
         if ($d.Error) { Log "Update failed: $($d.Error)"; return }
         $n = Install-SelfUpdateFiles $d.Folder $d.Temp
+        $s = Get-Settings; $s | Add-Member PendingNotes ("v{0}`n`n{1}" -f $script:PendingRelease.Version, "$($script:PendingRelease.Notes)") -Force; Save-Settings $s
         Log ("Updated {0} files{1}. Restarting..." -f $n, $(if ($d.Verified) { ' (checksum verified)' } else { '' }))
         Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"")
         $form.Close()
@@ -139,6 +171,17 @@ function Switch-AutoUpdate {
     Log "Automatic update check is now $(if ($s.AutoUpdate) { 'ON - checks when the toolkit opens (at most every 12 hours)' } else { 'OFF' })."
 }
 
+# First start after a self-update: show what changed.
+[void]$script:AfterShown.Add({
+    $s = Get-Settings
+    if ($s.PSObject.Properties.Name -contains 'PendingNotes' -and $s.PendingNotes) {
+        $txt = ("$($s.PendingNotes)" -replace '\*\*', '' -replace '(?m)^- ', '  - ')
+        if ($txt.Length -gt 1500) { $txt = $txt.Substring(0, 1500) + '...' }
+        $s.PendingNotes = ''; Save-Settings $s
+        Log "Updated to $AppVersion."
+        [void][System.Windows.Forms.MessageBox]::Show("Hallow Toolkit was updated - here's what's new in $txt", $AppName, 'OK', 'Information')
+    }
+})
 [void]$script:AfterShown.Add({
     $s = Get-Settings; $last = [datetime]::MinValue
     [void][datetime]::TryParse("$($s.LastUpdateCheck)", [ref]$last)

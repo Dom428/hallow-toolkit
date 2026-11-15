@@ -1,4 +1,4 @@
-﻿<#
+<#
   Hallow Toolkit - tune-up, monitor, health, gaming, games, network, storage and quick tools for this PC.
   Double-click "Hallow Toolkit.bat" (or the Desktop shortcut) and click Yes on the admin prompt.
 
@@ -874,7 +874,18 @@ Add-Tool $f 'Import a setup' 'Copy a friend''s tweaks and settings' {
     Update-TweakBoxes
     Log 'Setup imported. Restart Explorer (button below) if taskbar changes do not show yet.'
 } | Out-Null
-Add-Section $f 'Fixes'
+Add-Section $f 'Quick fixes'
+Add-Tool $f 'Fix audio' 'No sound / crackling - restart audio' { Repair-Audio } | Out-Null
+Add-Tool $f 'Fix Bluetooth' 'Device will not connect' { Repair-Bluetooth } | Out-Null
+Add-Tool $f 'Fix Start search' 'Search box blank or stuck' { Repair-Search } | Out-Null
+Add-Tool $f 'Reset Microsoft Store' 'Store downloads stuck or failing' { Repair-Store } | Out-Null
+Add-Tool $f 'Rebuild icons & thumbnails' 'Blank or wrong icons' {
+    if (Confirm-Action 'Rebuild the icon and thumbnail cache? Explorer (taskbar + folders) restarts for a moment.') { Repair-IconCache }
+} | Out-Null
+Add-Tool $f 'Sync clock' 'Game login / certificate errors' { Sync-Clock } | Out-Null
+Add-Tool $f 'Reset Windows Update' 'Updates stuck or failing' {
+    if (Confirm-Action "Reset Windows Update?`n`nStops the update services, moves the download cache aside and starts them again. Any half-downloaded updates download again.") { Reset-WindowsUpdate }
+} | Out-NullAdd-Section $f 'Fixes'
 Add-Tool $f 'Restart Explorer' 'Stuck taskbar or Start menu' { Restart-Explorer } | Out-Null
 Add-Tool $f 'Create restore point' 'Safety net before big changes' { New-RestorePoint } | Out-Null
 Add-Tool $f 'Restart into BIOS' 'For BIOS updates (EZ Flash)' { Restart-ToBios } | Out-Null
