@@ -245,7 +245,7 @@ function Test-NewerVersion([string]$Latest, [string]$Current) {
 # Copies the new files over this install (settings, logs, backups stay) - call from the window thread.
 function Install-SelfUpdateFiles([string]$Folder, [string]$Temp) {
     $n = 0
-    Get-ChildItem $Folder -File | Where-Object { $_.Extension -in '.ps1', '.ico', '.bat', '.txt' -and $_.Name -ne 'Install.ps1' } | ForEach-Object {
+    Get-ChildItem $Folder -File | Where-Object { $_.Extension -in '.ps1', '.ico', '.bat', '.txt', '.ttf' -and $_.Name -ne 'Install.ps1' } | ForEach-Object {
         Copy-Item $_.FullName $HallowRoot -Force; Unblock-File (Join-Path $HallowRoot $_.Name) -ErrorAction SilentlyContinue; $n++
     }
     if ($Temp -like "$env:TEMP*hallow-update-*") { Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue }

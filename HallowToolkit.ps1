@@ -37,10 +37,28 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 function RGB($r, $g, $b) { [System.Drawing.Color]::FromArgb($r, $g, $b) }
+# ---- themes (Tools tab > Theme; saved in settings.json). Accent = buttons/highlights, Second = section headers.
+$ThemeAccents = [ordered]@{
+    'Orange' = @{ Accent = RGB 255 122 26;  Hover = RGB 255 150 70;  Second = RGB 160 110 255 }
+    'Purple' = @{ Accent = RGB 168 112 255; Hover = RGB 190 148 255; Second = RGB 90 200 200 }
+    'Blue'   = @{ Accent = RGB 70 150 255;  Hover = RGB 110 175 255; Second = RGB 168 120 255 }
+    'Green'  = @{ Accent = RGB 60 205 125;  Hover = RGB 100 225 155; Second = RGB 120 170 255 }
+    'Red'    = @{ Accent = RGB 245 75 85;   Hover = RGB 255 110 118; Second = RGB 255 170 90 }
+    'Pink'   = @{ Accent = RGB 255 105 185; Hover = RGB 255 140 205; Second = RGB 160 120 255 }
+}
+$ThemeBases = [ordered]@{
+    'Hallow'   = @{ Bg = RGB 18 16 24; Nav = RGB 26 22 34; Panel = RGB 36 31 46; PanelHi = RGB 52 44 66; Muted = RGB 160 152 176; Grid = RGB 58 52 70 }
+    'Graphite' = @{ Bg = RGB 20 20 22; Nav = RGB 28 28 31; Panel = RGB 38 38 42; PanelHi = RGB 55 55 61; Muted = RGB 158 158 166; Grid = RGB 60 60 66 }
+    'Navy'     = @{ Bg = RGB 13 17 27; Nav = RGB 19 25 39; Panel = RGB 29 37 55; PanelHi = RGB 43 53 77; Muted = RGB 150 160 184; Grid = RGB 52 62 86 }
+    'OLED'     = @{ Bg = RGB 0 0 0;    Nav = RGB 10 10 12; Panel = RGB 22 22 26; PanelHi = RGB 40 40 46; Muted = RGB 150 150 160; Grid = RGB 50 50 56 }
+}
+$ts = Get-Settings
+$ta = $ThemeAccents["$($ts.Theme)"]; if (-not $ta) { $ta = $ThemeAccents['Orange'] }
+$tb = $ThemeBases["$($ts.ThemeBase)"]; if (-not $tb) { $tb = $ThemeBases['Hallow'] }
 $C = @{
-    Bg = RGB 18 16 24; Nav = RGB 26 22 34; Panel = RGB 36 31 46; PanelHi = RGB 52 44 66
-    Accent = RGB 255 122 26; Purple = RGB 160 110 255
-    Text = RGB 236 232 244; Muted = RGB 160 152 176; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
+    Bg = $tb.Bg; Nav = $tb.Nav; Panel = $tb.Panel; PanelHi = $tb.PanelHi; Grid = $tb.Grid
+    Accent = $ta.Accent; AccentHover = $ta.Hover; AccentText = RGB 20 12 4; Purple = $ta.Second
+    Text = RGB 236 232 244; Muted = $tb.Muted; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
 }
 function New-Font([float]$Size, [string]$Style = 'Regular', [string]$Family = 'Segoe UI') { New-Object System.Drawing.Font($Family, $Size, [System.Drawing.FontStyle]$Style) }
 
@@ -112,8 +130,10 @@ $script:CurrentPage = ''
 function Show-Page([string]$Name) {
     foreach ($k in $pages.Keys) { $pages[$k].Visible = ($k -eq $Name) }
     foreach ($b in $navButtons) {
-        if ($b.Tag -eq $Name) { $b.BackColor = $C.PanelHi; $b.ForeColor = $C.Accent }
+        $on = ($b.Tag -eq $Name)
+        if ($on) { $b.BackColor = $C.PanelHi; $b.ForeColor = $C.Accent }
         else { $b.BackColor = $C.Nav; $b.ForeColor = $C.Text }
+        if ($script:NavIcons.ContainsKey($b.Tag)) { $b.Image = $script:NavIcons[$b.Tag][[int]$on] }
     }
     $script:CurrentPage = $Name
     if ($Name -eq 'Games' -and -not $script:GamesLoaded) { Update-GameList }
@@ -122,6 +142,12 @@ function Show-Page([string]$Name) {
     if ($script:PageShowHooks -and $script:PageShowHooks.ContainsKey($Name)) { $h = $script:PageShowHooks[$Name]; $script:PageShowHooks.Remove($Name); & $h }
 }
 
+$PageIcons = @{
+    'Tune-up' = 'wand-magic-sparkles'; 'Monitor' = 'gauge-high'; 'Health' = 'heart-pulse'; 'Gaming' = 'rocket'; 'Games' = 'gamepad'
+    'Network' = 'wifi'; 'Server' = 'server'; 'Storage' = 'hard-drive'; 'Uninstall' = 'trash-can'; 'Tools' = 'screwdriver-wrench'
+    'Tweaks' = 'sliders'; 'Dev' = 'code'; 'Drivers' = 'microchip'; 'Mic' = 'microphone'
+}
+$script:NavIcons = @{}
 function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
     $page = New-Object System.Windows.Forms.Panel
     $page.Dock = 'Fill'; $page.Visible = $false
@@ -145,6 +171,13 @@ function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
     $nb.Text = "  $Glyph   $Name"; $nb.Tag = $Name; $nb.UseMnemonic = $false
     $nb.FlatStyle = 'Flat'; $nb.FlatAppearance.BorderSize = 0; $nb.FlatAppearance.MouseOverBackColor = $C.Panel
     $nb.TextAlign = 'MiddleLeft'; $nb.Font = New-Font 11 'Bold'
+    $pageIcon = $PageIcons[$Name]
+    if ($pageIcon -and (Test-IconFont)) {
+        $script:NavIcons[$Name] = @((Get-Icon $pageIcon $C.Muted 18), (Get-Icon $pageIcon $C.Accent 18))
+        $nb.Text = "  $Name"; $nb.Image = $script:NavIcons[$Name][0]
+        $nb.ImageAlign = 'MiddleLeft'; $nb.TextImageRelation = 'ImageBeforeText'
+        $nb.Padding = New-Object System.Windows.Forms.Padding(20, 0, 0, 0)
+    }
     $nb.Size = New-Object System.Drawing.Size(220, 40); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
     $nb.Cursor = [System.Windows.Forms.Cursors]::Hand
     $nb.Add_Click({ Show-Page $this.Tag })
@@ -153,11 +186,20 @@ function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
     return $flow
 }
 
-function Add-Section($Flow, [string]$Text) {
+function Add-Section($Flow, [string]$Text, [string]$Icon) {
     $l = New-Object System.Windows.Forms.Label
     $l.UseMnemonic = $false; $l.Text = $Text.ToUpper(); $l.ForeColor = $C.Purple; $l.Font = New-Font 8.5 'Bold'
     $l.AutoSize = $false; $l.Width = 860; $l.Height = 28; $l.TextAlign = 'BottomLeft'
     $l.Margin = New-Object System.Windows.Forms.Padding(2, 8, 0, 4)
+    if (Test-IconFont) {
+        if (-not $Icon) { $Icon = Get-ToolIconName $Text; if ($Icon -eq 'circle-chevron-right') { $Icon = 'caret-right' } }
+        $pb = New-Object System.Windows.Forms.PictureBox
+        $pb.Image = Get-Icon $Icon $C.Purple 14; $pb.Size = New-Object System.Drawing.Size(14, 14)
+        $pb.Margin = New-Object System.Windows.Forms.Padding(2, 20, 0, 4)
+        if ($Flow.Controls.Count) { $Flow.SetFlowBreak($Flow.Controls[$Flow.Controls.Count - 1], $true) }   # icon starts a new row
+        $Flow.Controls.Add($pb)
+        $l.Width = 840; $l.Margin = New-Object System.Windows.Forms.Padding(4, 8, 0, 4)
+    }
     $Flow.Controls.Add($l); $Flow.SetFlowBreak($l, $true)
 }
 
@@ -171,13 +213,18 @@ function Add-Note($Flow, [string]$Text) {
 }
 
 $tips = New-Object System.Windows.Forms.ToolTip
-function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [switch]$Primary, [int]$Width = 278) {
+function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [switch]$Primary, [int]$Width = 278, [string]$Icon) {
     $b = New-Object System.Windows.Forms.Button
     $b.UseMnemonic = $false; $b.Text = "$Title`n$Desc"
+    if (Test-IconFont) {
+        if (-not $Icon) { $Icon = Get-ToolIconName $Title }
+        $b.Image = Get-Icon $Icon $(if ($Primary) { $C.AccentText } else { $C.Accent }) 20
+        $b.ImageAlign = 'MiddleLeft'; $b.TextImageRelation = 'ImageBeforeText'
+    }
     $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderSize = 0
     $b.BackColor = $(if ($Primary) { $C.Accent } else { $C.Panel })
-    $b.ForeColor = $(if ($Primary) { RGB 20 12 4 } else { $C.Text })
-    $b.FlatAppearance.MouseOverBackColor = $(if ($Primary) { RGB 255 150 70 } else { $C.PanelHi })
+    $b.ForeColor = $(if ($Primary) { $C.AccentText } else { $C.Text })
+    $b.FlatAppearance.MouseOverBackColor = $(if ($Primary) { $C.AccentHover } else { $C.PanelHi })
     $b.Size = New-Object System.Drawing.Size($Width, 64)
     $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
     $b.TextAlign = 'MiddleLeft'; $b.Padding = New-Object System.Windows.Forms.Padding(12, 0, 6, 0)
@@ -298,6 +345,7 @@ function Install-AppUpdates {
     }
 }
 [void]$script:AfterShown.Add({ Start-AppUpdateCheck -Quiet })
+[void]$script:AfterShown.Add({ if (-not (Test-Path $IconFontFile)) { Start-Background 'Icon font' $IconFontFetchWork @($IconFontUrl, $IconFontFile, $IconFontSha) { param($o) foreach ($l in $o) { Log "$l" } } } })
 Add-Section $f 'Automatic'
 Add-Tool $f 'Weekly auto clean-up' 'Turn on / off (Sundays 3 AM)' { Invoke-ToggleWeeklyClean } | Out-Null
 Add-Tool $f 'Startup apps' 'Choose what launches with Windows' { Start-Process 'ms-settings:startupapps'; Log 'Opened Startup apps.' } | Out-Null
@@ -459,6 +507,9 @@ function Start-SystemCheck {
 Add-Section $f 'Crashes'
 Add-Tool $f 'Crash detective' 'What caused each crash, in plain English' { Invoke-CrashDetective } -Primary | Out-Null
 Add-Tool $f 'Reliability history' 'Windows crash timeline' { Start-Process perfmon.exe '/rel'; Log 'Opened Reliability history.' } | Out-Null
+Add-Section $f 'Startup speed' 'stopwatch'
+Add-Tool $f 'Boot time' 'How long Windows takes to start + what slows it' { Invoke-BootTime } | Out-Null
+Add-Tool $f 'Startup apps' 'Turn off apps that slow the start' { Show-Page 'Tweaks' } -Icon 'gear' | Out-Null
 Add-Section $f 'Memory (RAM)'
 Add-Tool $f 'Memory info' 'Speed, EXPO status, last test result' { Invoke-MemoryInfo } | Out-Null
 Add-Tool $f 'Run memory test' 'Windows Memory Diagnostic (on restart)' { Invoke-MemoryTest } | Out-Null
@@ -636,6 +687,64 @@ Add-Tool $f 'Flush DNS' 'Fixes sites that will not load' { Clear-DnsClientCache;
 Add-Tool $f 'Use Cloudflare DNS' 'Fast, private DNS (1.1.1.1)' { Set-GamingDns $true } | Out-Null
 Add-Tool $f 'Reset DNS to automatic' 'Undo Cloudflare DNS' { Set-GamingDns $false } | Out-Null
 Add-Tool $f 'Reset network' 'Winsock + TCP/IP reset (restart needed)' { Invoke-NetworkReset } | Out-Null
+
+# ================================================================ PAGE: SERVER
+$f = Add-Page 'Server' ([char]0x25A3) 'Media apps, your own servers and drive space - is everything up?'
+Add-Section $f 'Status' 'server'
+Add-Tool $f 'Check now' 'Apps, servers and drives' { Start-ServerCheck } -Primary -Width 210 | Out-Null
+Add-Tool $f 'Open web page' 'Selected app or server' {
+    $r = Get-SelectedServer; if (-not $r) { return }
+    if ($r.Web) { Start-Process $r.Web; Log "Opened $($r.Web)" } elseif ($r.Kind -eq 'Drive') { Start-Process explorer.exe $r.Path } else { Log "$($r.Name) has no web page." }
+} -Width 210 -Icon 'arrow-up-right-from-square' | Out-Null
+Add-Tool $f 'Start / restart' 'Selected app on this PC' {
+    $r = Get-SelectedServer; if (-not $r) { return }
+    if ($r.Kind -eq 'Drive') { Log 'Pick an app, not a drive.'; return }
+    if (Confirm-Action "Start or restart $($r.Name)?") { Start-ServerApp $r; Start-ServerCheck }
+} -Width 210 -Icon 'rotate' | Out-Null
+Add-Tool $f 'Add a server' 'Website or IP to watch' {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $url = [Microsoft.VisualBasic.Interaction]::InputBox("Address to check, for example:`n  https://myserver.example.com`n  http://192.168.1.50:8096/health", 'Add a server', '')
+    if (-not $url.Trim()) { return }
+    $guess = ($url -replace '^https?://', '' -split '[/:]')[0]
+    $name = [Microsoft.VisualBasic.Interaction]::InputBox('Name to show for it:', 'Add a server', $guess)
+    if (-not $name.Trim()) { $name = $guess }
+    Add-ServerCheck $name.Trim() $url.Trim(); Start-ServerCheck
+} -Width 210 -Icon 'plus' | Out-Null
+$srvList = New-DarkList $f @(@('Name', 210), @('Status', 120), @('Details', 520)) 860 330 $false
+$srvList.ShowItemToolTips = $true; $f.SetFlowBreak($srvList, $true)
+function Get-SelectedServer { if ($srvList.SelectedItems.Count) { $srvList.SelectedItems[0].Tag } else { Log 'Click a row in the list first.'; $null } }
+function Start-ServerCheck {
+    $script:SrvChecking = $true
+    Start-Background 'Server check' $ServerCheckWork @($ServerCatalog, (Get-ServerChecks), (Get-ServerHidden)) {
+        param($out)
+        $script:SrvChecking = $false
+        $srvList.Items.Clear(); $bad = @()
+        foreach ($r in $out | Where-Object { $_.Name }) {
+            $li = New-Object System.Windows.Forms.ListViewItem("$($r.Name)")
+            [void]$li.SubItems.Add("$($r.Status)"); [void]$li.SubItems.Add("$($r.Detail)")
+            $li.Tag = $r; $li.ToolTipText = "$($r.Detail)"
+            $li.ForeColor = switch ($r.Verdict) { 'Good' { $C.Good } 'Warn' { $C.Warn } 'Bad' { $C.Bad } default { $C.Muted } }
+            [void]$srvList.Items.Add($li)
+            if ($r.Verdict -ne 'Good') { $bad += $r }
+        }
+        if ($bad) { Log ("Server check: {0} need a look - {1}" -f $bad.Count, (($bad | ForEach-Object { "$($_.Name) ($($_.Status))" }) -join ', ')) }
+        else { Log 'Server check: everything is up.' }
+    }
+}
+Add-Section $f 'Manage' 'sliders'
+Add-Tool $f 'Remove / hide' 'Selected row' {
+    $r = Get-SelectedServer; if ($r) { Remove-ServerRow $r; Start-ServerCheck }
+} -Width 210 -Icon 'eye-slash' | Out-Null
+Add-Tool $f 'Show hidden apps' 'Bring hidden apps back' { Show-HiddenServerApps; Log 'Hidden apps will show again.'; Start-ServerCheck } -Width 210 -Icon 'list' | Out-Null
+$script:SrvAlertBtn = Add-Tool $f 'Tray alerts: ON' 'Pop-up when something goes down' {
+    $s = Get-Settings; $s.ServerAlerts = -not $s.ServerAlerts; Save-Settings $s
+    $script:SrvAlertBtn.Text = "Tray alerts: $(if ($s.ServerAlerts) { 'ON' } else { 'OFF' })`nPop-up when something goes down"
+    Log ("Server alerts from the tray app are now {0}. The tray checks every 5 minutes." -f $(if ($s.ServerAlerts) { 'on' } else { 'off' }))
+} -Width 210 -Icon 'triangle-exclamation'
+if (-not (Get-Settings).ServerAlerts) { $script:SrvAlertBtn.Text = "Tray alerts: OFF`nPop-up when something goes down" }
+Add-Note $f 'Apps are found automatically (Radarr, Sonarr, Prowlarr, Jellyfin, Emby, Plex, qBittorrent, Tailscale...). Servers you add stay on this PC only.' | Out-Null
+if (-not $script:PageShowHooks) { $script:PageShowHooks = @{} }
+$script:PageShowHooks['Server'] = { Start-ServerCheck }
 
 # ================================================================ PAGE: STORAGE
 $f = Add-Page 'Storage' ([char]0x25A4) 'Find and remove what is eating your disk space'
@@ -847,6 +956,39 @@ Add-Section $f 'Info'
 Add-Tool $f 'Copy my PC specs' 'For Discord, forums, support' { Copy-Specs } -Primary | Out-Null
 Add-Tool $f 'Open log folder' 'Every action is logged' { Start-Process explorer.exe $LogDir } | Out-Null
 Add-Tool $f 'Install CPU temp sensor' 'LibreHardwareMonitor (free, winget)' { Install-Lhm } | Out-Null
+
+Add-Section $f 'Theme (saved - the window reopens to apply it)' 'star'
+function Set-Theme([string]$Key, [string]$Value) {
+    if ($script:Jobs.Count) { Log "Wait for '$($script:Jobs[0].Name)' to finish, then pick the theme again."; return }
+    $s = Get-Settings; $s | Add-Member -NotePropertyName $Key -NotePropertyValue $Value -Force; Save-Settings $s
+    Log "Theme: $Value - reopening the window..."
+    Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-StartPage', 'Tools')
+    $form.Close()
+}
+function Add-Swatch($Flow, [string]$Text, $Back, $Fore, $Border, [bool]$On, [scriptblock]$Click, [bool]$Break) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.UseMnemonic = $false; $b.Text = $(if ($On) { "$Text  (on)" } else { $Text })
+    $b.FlatStyle = 'Flat'; $b.BackColor = $Back; $b.ForeColor = $Fore
+    $b.FlatAppearance.BorderColor = $Border; $b.FlatAppearance.BorderSize = $(if ($On) { 3 } else { 1 })
+    $b.FlatAppearance.MouseOverBackColor = $Back
+    $b.Size = New-Object System.Drawing.Size(132, 40); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
+    $b.Font = New-Font 9.5 $(if ($On) { 'Bold' } else { 'Regular' }); $b.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $b.Tag = $Click; $b.Add_Click({ & $this.Tag })
+    $Flow.Controls.Add($b); if ($Break) { $Flow.SetFlowBreak($b, $true) }
+}
+$curAccent = $(if ($ThemeAccents.Contains("$($ts.Theme)")) { "$($ts.Theme)" } else { 'Orange' })
+$curBase = $(if ($ThemeBases.Contains("$($ts.ThemeBase)")) { "$($ts.ThemeBase)" } else { 'Hallow' })
+$keys = @($ThemeAccents.Keys)
+foreach ($k in $keys) {
+    Add-Swatch $f $k $ThemeAccents[$k].Accent $C.AccentText $C.Text ($k -eq $curAccent) ([scriptblock]::Create("Set-Theme 'Theme' '$k'")) ($k -eq $keys[-1])
+}
+$keys = @($ThemeBases.Keys)
+foreach ($k in $keys) {
+    $label = @{ 'Hallow' = 'Hallow dark'; 'Graphite' = 'Graphite'; 'Navy' = 'Navy'; 'OLED' = 'OLED black' }[$k]
+    Add-Swatch $f $label $ThemeBases[$k].Bg $C.Text $(if ($k -eq $curBase) { $C.Accent } else { $ThemeBases[$k].PanelHi }) ($k -eq $curBase) ([scriptblock]::Create("Set-Theme 'ThemeBase' '$k'")) ($k -eq $keys[-1])
+}
+Add-Note $f 'Top row: accent colour for buttons, icons and highlights. Bottom row: background. Your pick is kept across updates and goes along with Share your setup.' | Out-Null
+
 Add-Section $f 'Toolkit updates'
 Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
 Add-Tool $f 'Auto update check' 'Turn on / off (checks at launch)' { Switch-AutoUpdate } | Out-Null

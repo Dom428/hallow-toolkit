@@ -70,6 +70,8 @@ $miOpen.Font = New-Object System.Drawing.Font($miOpen.Font, [System.Drawing.Font
 $miOpen.Add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"") })
 $miMon = $menu.Items.Add('Open Monitor')
 $miMon.Add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-StartPage', 'Monitor') })
+$miServer = $menu.Items.Add('Server status')
+$miServer.Add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-StartPage', 'Server') })
 $miClean = $menu.Items.Add('Quick Clean-up (keeps Recycle Bin)')
 $miClean.Add_Click({
     Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-Mode', 'Quick', '-NoRecycleBin')
@@ -108,6 +110,12 @@ $miStartup.Add_Click({ Set-TrayAtStartup $miStartup.Checked })
 [void]$menu.Items.Add('-')
 $miExit = $menu.Items.Add('Exit tray app')
 $miExit.Add_Click({ $timer.Stop(); $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
+if (Test-IconFont) {
+    $ic = [System.Drawing.Color]::FromArgb(70, 60, 90)
+    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miExit, 'power-off'))) {
+        $pair[0].Image = Get-Icon $pair[1] $ic 16
+    }
+}
 $icon.ContextMenuStrip = $menu
 $icon.Add_DoubleClick({ $miOpen.PerformClick() })
 
@@ -144,7 +152,41 @@ function Complete-TrayUpdateCheck {
         Notify "Hallow Toolkit v$($r.Version) is out (you have v$AppVersion). Click here to open the toolkit and update."
     }
 }
-$icon.Add_BalloonTipClicked({ $miOpen.PerformClick() })
+$icon.Add_BalloonTipClicked({ if ($script:AlertPage -eq 'Server') { $script:AlertPage = ''; $miServer.PerformClick() } else { $miOpen.PerformClick() } })
+
+# ---- server alerts: every 5 minutes; tells you when an app/server that was up goes down (twice in a row), or a drive is nearly full
+$script:SrvJob = $null; $script:SrvState = @{}; $script:DriveWarned = @{}; $script:AlertPage = ''
+function Start-TrayServerCheck {
+    if ($script:SrvJob) { return }
+    if (-not (Get-Settings).ServerAlerts) { $script:SrvState = @{}; return }
+    $ps = [powershell]::Create()
+    [void]$ps.AddScript($ServerCheckWork.ToString()).AddArgument($ServerCatalog).AddArgument((Get-ServerChecks)).AddArgument((Get-ServerHidden))
+    $script:SrvJob = @{ PS = $ps; H = $ps.BeginInvoke() }
+}
+function Complete-TrayServerCheck {
+    if (-not $script:SrvJob -or -not $script:SrvJob.H.IsCompleted) { return }
+    try { $rows = @($script:SrvJob.PS.EndInvoke($script:SrvJob.H)) } catch { $rows = @() }
+    $script:SrvJob.PS.Dispose(); $script:SrvJob = $null
+    $down = @(); $back = @()
+    foreach ($r in $rows) {
+        if (-not $r.Key) { continue }
+        if ($r.Kind -eq 'Drive') {
+            if ($r.Verdict -eq 'Bad' -and $script:DriveWarned[$r.Key] -ne (Get-Date).Date) { $script:DriveWarned[$r.Key] = (Get-Date).Date; $down += "$($r.Name) is nearly full ($($r.Detail))" }
+            continue
+        }
+        if (-not $script:SrvState.ContainsKey($r.Key)) { $script:SrvState[$r.Key] = @{ SeenUp = $false; Fails = 0; Alerted = $false } }
+        $st = $script:SrvState[$r.Key]
+        if ($r.Verdict -eq 'Good') {
+            if ($st.Alerted) { $back += $r.Name }
+            $st.SeenUp = $true; $st.Fails = 0; $st.Alerted = $false
+        } else {
+            $st.Fails++
+            if ($st.SeenUp -and $st.Fails -eq 2 -and -not $st.Alerted) { $st.Alerted = $true; $down += "$($r.Name) - $($r.Status)" }
+        }
+    }
+    if ($down) { $script:AlertPage = 'Server'; Notify ("Server alert: {0}. Click for details." -f ($down -join '; ')) }
+    elseif ($back) { Notify ("Back up: {0}" -f ($back -join ', ')) }
+}
 
 # ---- auto game boost loop
 $script:InGame = $null; $script:Closed = @(); $script:Misses = 0; $script:HotWarned = $false
@@ -162,6 +204,8 @@ $timer.Add_Tick({
                 Notify "Something lowered your mic ($($fixedMics -join ', ')) - put it back to your level. If it keeps happening, turn off Discord's 'Automatically adjust input volume'."
             } elseif ($fixedMics.Count) { Log "[tray] Mic put back to your level: $($fixedMics -join ', ')" }
         }
+        if ($script:Ticks % 60 -eq 2) { Start-TrayServerCheck }   # 5 minutes
+        Complete-TrayServerCheck
         $g = Find-RunningGame
         if ($script:InGame -and $miRecord.Checked) { try { $script:Samples.Add((Get-SessionSample)) } catch { } }
         # overheat alert while playing (once per game)

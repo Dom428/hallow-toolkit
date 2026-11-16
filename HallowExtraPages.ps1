@@ -1,10 +1,10 @@
 <#
   Hallow Toolkit v3 - extra pages and sections. Dot-sourced by HallowToolkit.ps1 after the main pages are built.
 #>
-$script:PageShowHooks = @{}
+if (-not $script:PageShowHooks) { $script:PageShowHooks = @{} }
 $ChartBlue = RGB 57 135 229     # #3987e5  (GPU)   - validated dark categorical slot 1
 $ChartOrange = RGB 217 89 38    # #d95926  (CPU)   - validated dark categorical slot 2
-$GridInk = RGB 58 52 70
+$GridInk = $C.Grid
 
 # ---------------------------------------------------------------- small helpers
 function Show-Chooser([string]$Title, [string[]]$Items, [string]$Button = 'OK') {
@@ -15,7 +15,7 @@ function Show-Chooser([string]$Title, [string[]]$Items, [string]$Button = 'OK') 
     $lb.Dock = 'Fill'; $lb.BackColor = $C.Panel; $lb.ForeColor = $C.Text; $lb.BorderStyle = 'None'; $lb.CheckOnClick = $true
     foreach ($i in $Items) { [void]$lb.Items.Add($i) }
     $ok = New-Object System.Windows.Forms.Button
-    $ok.Text = $Button; $ok.Dock = 'Bottom'; $ok.Height = 40; $ok.FlatStyle = 'Flat'; $ok.BackColor = $C.Accent; $ok.ForeColor = RGB 20 12 4
+    $ok.Text = $Button; $ok.Dock = 'Bottom'; $ok.Height = 40; $ok.FlatStyle = 'Flat'; $ok.BackColor = $C.Accent; $ok.ForeColor = $C.AccentText
     $ok.DialogResult = 'OK'
     $d.Controls.Add($lb); $d.Controls.Add($ok); $d.AcceptButton = $ok
     if ($d.ShowDialog($form) -eq 'OK') { @($lb.CheckedItems | ForEach-Object { [string]$_ }) } else { @() }

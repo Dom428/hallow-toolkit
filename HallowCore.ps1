@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '3.6'
+$AppVersion = '3.7'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -108,6 +108,11 @@ function Get-Settings {
         LastUpdateCheck = ''
         GameSession     = $null
         LastBios        = ''
+        ServerChecks    = @()
+        ServerHidden    = @()
+        ServerAlerts    = $true
+        Theme           = 'Orange'
+        ThemeBase       = 'Hallow'
     }
     if (Test-Path $SettingsFile) {
         try {
@@ -292,10 +297,7 @@ function Invoke-CrashDetective {
         foreach ($m in $dumps | Select-Object -First 5) { Log ("  {0:yyyy-MM-dd HH:mm}  {1}" -f $m.LastWriteTime, $m.Name) }
     }
 
-    $apps = Get-WinEvent -FilterHashtable @{ LogName = 'Application'; ProviderName = 'Application Error'; Id = 1000; StartTime = (Get-Date).AddDays(-30) } -ErrorAction SilentlyContinue |
-        ForEach-Object { $_.Properties[0].Value } | Group-Object | Sort-Object Count -Descending | Select-Object -First 6
-    if ($apps) { Log 'Apps/games that crashed (30 days):'; foreach ($a in $apps) { Log ("  {0,3}x  {1}" -f $a.Count, $a.Name) } }
-    else { Log 'Apps/games that crashed (30 days): none' }
+    Show-AppCrashCulprits 30
 
     Log '--- Verdict ---'
     if (($kp.Count + $whea.Count + $tdr.Count) -eq 0) { Log 'No system crashes found. Nice and stable.' }
@@ -1215,3 +1217,6 @@ function Remove-LeftoverItems($Items) {
 . (Join-Path $HallowRoot 'HallowPerf.ps1')
 . (Join-Path $HallowRoot 'HallowFixes.ps1')
 . (Join-Path $HallowRoot 'HallowMic.ps1')
+. (Join-Path $HallowRoot 'HallowDiag.ps1')
+. (Join-Path $HallowRoot 'HallowServer.ps1')
+. (Join-Path $HallowRoot 'HallowIcons.ps1')

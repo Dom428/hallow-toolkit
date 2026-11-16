@@ -9,6 +9,22 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.7
+- New look: Font Awesome icons on every tab, button and section (and in the tray menu).
+- Themes: Tools tab > Theme. Pick an accent colour (orange, purple, blue, green, red, pink) and a
+  background (Hallow dark, Graphite, Navy, OLED black). Your pick is saved and kept across updates.
+- New Server tab: is Radarr, Sonarr, Jellyfin, Plex, qBittorrent, Tailscale... running and answering?
+  Add your own servers or websites to watch, see free space on every drive, open or restart apps.
+- The tray app checks your servers every 5 minutes and pops up if something goes down (and when
+  it's back), or a drive is nearly full. Turn it off on the Server tab.
+- Health tab > Boot time: how long Windows takes to start, whether it's getting slower, and which
+  apps, drivers or services slow it down.
+- Crash detective now says which part crashed each game or app (graphics driver, overlay,
+  anti-cheat, the game itself...) and what to do about it, plus which programs froze.
+
+Icons: Font Awesome Free (fontawesome.com) - font under SIL OFL 1.1, icons under CC BY 4.0.
+See FontAwesome-LICENSE.txt in the toolkit folder.
+
 WHAT'S NEW IN 3.6
 - New Mic tab: quiet in games but fine in Discord? One click sets your mic level, makes it the
   default for games AND calls, stops apps locking it, and stops Windows lowering sounds on calls.

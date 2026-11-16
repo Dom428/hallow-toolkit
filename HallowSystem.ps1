@@ -294,7 +294,7 @@ function Invoke-PrivacyClean {
 }
 
 # ================================================================ SHARE YOUR SETUP (export / import)
-$ShareableSettings = 'BoostApps', 'AutoBoost', 'ReopenAfterGame', 'PanicHotkey', 'AutoUpdate', 'RecordSessions'
+$ShareableSettings = 'BoostApps', 'AutoBoost', 'ReopenAfterGame', 'PanicHotkey', 'AutoUpdate', 'RecordSessions', 'Theme', 'ThemeBase'
 
 function Export-HallowSetup([string]$File) {
     $s = Get-Settings
