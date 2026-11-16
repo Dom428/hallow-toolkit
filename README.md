@@ -15,6 +15,7 @@ The toolkit checks this repo for new releases when it opens and asks before it u
 - Live monitor, game boost, game sessions, save backups, server ping
 - Storage scans, disk map, Revo-style deep uninstall with leftovers scan
 - Tweaks, startup and services manager, dev toolbox
+- **Mic:** quiet in games but fine in Discord? One-click fix for the Windows mic level, default devices, exclusive control and call ducking (understands virtual mics like SteelSeries Sonar), a live meter, and a warning when an app keeps lowering your mic
 - **Drivers:** newest motherboard drivers and BIOS from the maker (fully automatic for ASUS), plus Windows Update drivers for any brand
 
 ## Releasing

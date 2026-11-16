@@ -9,6 +9,16 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.6
+- New Mic tab: quiet in games but fine in Discord? One click sets your mic level, makes it the
+  default for games AND calls, stops apps locking it, and stops Windows lowering sounds on calls.
+- Works with virtual mics like SteelSeries Sonar: keeps Sonar as your default and fixes the real
+  mic behind it.
+- Pick your own level per mic (e.g. 65% for a mic on a stand), a live meter showing what games
+  hear, and a warning when Discord's auto-adjust keeps lowering your mic.
+- Tray app can keep your mic at your level (Mic tab > Keep my mic level).
+- Fixed the Tools tab "Fixes" header missing (and a startup error).
+
 WHAT'S NEW IN 3.5
 - Tools tab > Quick fixes: audio, Bluetooth, Start search, Microsoft Store, icons & thumbnails,
   clock sync and Windows Update reset.

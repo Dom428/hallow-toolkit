@@ -155,6 +155,13 @@ $timer.Add_Tick({
         $script:Ticks++
         if ($script:Ticks % 720 -eq 1) { Start-TrayUpdateCheck }   # at start, then hourly (the 12-hour limit is inside)
         Complete-TrayUpdateCheck
+        if ($script:Ticks % 6 -eq 1 -and (Get-Settings).KeepMicLevel) {   # every 30 s
+            $fixedMics = @(Restore-MicLevels)
+            if ($fixedMics.Count -and -not $script:MicWarned) {
+                $script:MicWarned = $true
+                Notify "Something lowered your mic ($($fixedMics -join ', ')) - put it back to your level. If it keeps happening, turn off Discord's 'Automatically adjust input volume'."
+            } elseif ($fixedMics.Count) { Log "[tray] Mic put back to your level: $($fixedMics -join ', ')" }
+        }
         $g = Find-RunningGame
         if ($script:InGame -and $miRecord.Checked) { try { $script:Samples.Add((Get-SessionSample)) } catch { } }
         # overheat alert while playing (once per game)

@@ -839,6 +839,7 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 
 . (Join-Path $PSScriptRoot 'HallowExtraPages.ps1')
 . (Join-Path $PSScriptRoot 'HallowDriverPage.ps1')
+. (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
 
 # ================================================================ PAGE: TOOLS
 $f = Add-Page 'Tools' ([char]0x2692) 'Handy Windows tools in one place'
@@ -885,7 +886,8 @@ Add-Tool $f 'Rebuild icons & thumbnails' 'Blank or wrong icons' {
 Add-Tool $f 'Sync clock' 'Game login / certificate errors' { Sync-Clock } | Out-Null
 Add-Tool $f 'Reset Windows Update' 'Updates stuck or failing' {
     if (Confirm-Action "Reset Windows Update?`n`nStops the update services, moves the download cache aside and starts them again. Any half-downloaded updates download again.") { Reset-WindowsUpdate }
-} | Out-NullAdd-Section $f 'Fixes'
+} | Out-Null
+Add-Section $f 'Fixes'
 Add-Tool $f 'Restart Explorer' 'Stuck taskbar or Start menu' { Restart-Explorer } | Out-Null
 Add-Tool $f 'Create restore point' 'Safety net before big changes' { New-RestorePoint } | Out-Null
 Add-Tool $f 'Restart into BIOS' 'For BIOS updates (EZ Flash)' { Restart-ToBios } | Out-Null
