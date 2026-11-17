@@ -259,3 +259,56 @@ $f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
 $snapList = New-DarkList $f @(@('Change', 80), @('Kind', 120), @('Item', 400), @('Details', 280)) 880 180 $false
 $snapList.ShowItemToolTips = $true; $f.SetFlowBreak($snapList, $true)
 [void]$script:AfterShown.Add({ Update-SnapshotCombo })
+
+# ================================================================ SERVER: Discord posts + phone dashboard (v4.4)
+$f = $script:PageFlows['Server']
+Add-Section $f 'Discord posts' 'comments'
+$discordNote = Add-Note $f ''
+function Update-DiscordNote {
+    $u = Get-DiscordWebhook
+    $discordNote.Text = $(if ($u) { "Connected to a Discord channel (webhook ...$($u.Substring($u.Length - 4))). The tray app posts there. The link stays on this PC only." }
+        else { 'Not connected. In Discord: channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL, then click Connect.' })
+}
+Add-Tool $f 'Connect Discord' 'Paste a channel webhook link' {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $u = [Microsoft.VisualBasic.Interaction]::InputBox("Paste the Discord webhook link.`n`nIn Discord: channel settings > Integrations > Webhooks > New Webhook > Copy Webhook URL.`n`nIt's kept only on this PC and never shared with your setup.", 'Connect Discord', '')
+    $u = "$u".Trim()
+    if (-not $u) { return }
+    if (-not (Test-DiscordWebhookUrl $u)) { Log 'That is not a Discord webhook link (it starts with https://discord.com/api/webhooks/...).'; return }
+    Set-LinkSetting 'DiscordWebhook' $u; Update-DiscordNote
+    if (Send-DiscordPost 'Hallow Toolkit connected' 'Game sessions and server alerts from this PC will show up here.' 0x6ED28C) { Log 'Discord connected - check the channel for the test post.' } else { Log 'Saved, but the test post failed - check the link.' }
+} -Primary -Width 210 -Icon 'link' | Out-Null
+Add-Tool $f 'Send test post' 'Check the channel gets it' {
+    if (-not (Get-DiscordWebhook)) { Log 'Connect Discord first.'; return }
+    if (Send-DiscordPost 'Test from Hallow Toolkit' ("Sent {0:ddd h:mm tt}. If you can read this, posts work." -f (Get-Date))) { Log 'Test post sent.' }
+} -Width 210 | Out-Null
+Add-Tool $f 'Sessions' 'Post when you stop playing' { Set-LinkSetting 'DiscordSessions' (-not (Get-LinkSetting 'DiscordSessions' $true)) } -Width 210 -State { Get-LinkSetting 'DiscordSessions' $true } | Out-Null
+Add-Tool $f 'Alerts' 'Post when a server goes down' { Set-LinkSetting 'DiscordServer' (-not (Get-LinkSetting 'DiscordServer' $true)) } -Width 210 -State { Get-LinkSetting 'DiscordServer' $true } | Out-Null
+Add-Tool $f 'Disconnect' 'Forget the webhook link' {
+    $s = Get-Settings; if ($s.PSObject.Properties.Name -contains 'DiscordWebhook') { $s.PSObject.Properties.Remove('DiscordWebhook'); Save-Settings $s }
+    Update-DiscordNote; Log 'Discord disconnected - the link is removed from this PC.'
+} -Width 210 -Icon 'link-slash' | Out-Null
+[void]$script:AfterShown.Add({ Update-DiscordNote })
+
+Add-Section $f 'Phone dashboard (over Tailscale)' 'mobile-screen'
+$dashNote = Add-Note $f ''
+$dashNote.Height = 36
+function Update-DashNote {
+    $ip = Get-TailscaleIP
+    $dashNote.Text = $(if (-not $ip) { 'Tailscale isn''t connected on this PC - the dashboard only works over Tailscale (so it''s never open to the internet).' }
+        else { "Temps, load, what you're playing, servers and drives on your phone - read-only. Works on devices in your Tailscale network, from anywhere. Needs the tray app running. If Windows asks, allow PowerShell on private networks." })
+}
+Add-Tool $f 'Dashboard' 'Served by the tray app' {
+    $on = -not (Get-LinkSetting 'PhoneDashboard' $false); Set-LinkSetting 'PhoneDashboard' $on
+    if ($on) {
+        [void](Get-DashToken)
+        if (-not (Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object CommandLine -like '*HallowTray.ps1*')) { Start-TrayApp }
+        Log 'Phone dashboard on - the tray app starts it within a minute. Click Copy phone link and open it on your phone (Tailscale on).'
+    } else { Log 'Phone dashboard off (the tray app stops it within a minute).' }
+} -Primary -Width 210 -Icon 'mobile-screen' -State { Get-LinkSetting 'PhoneDashboard' $false } | Out-Null
+Add-Tool $f 'Copy phone link' 'Send it to your phone' {
+    $u = Get-DashUrl; if (-not $u) { Log 'Tailscale isn''t connected on this PC.'; return }
+    [System.Windows.Forms.Clipboard]::SetText($u); Log 'Phone link copied. Keep it private - the key in it is what lets you in. Bookmark it on your phone.'
+} -Width 210 -Icon 'copy' | Out-Null
+Add-Tool $f 'New link' 'Old link stops working' { [void](New-DashToken); Log 'New dashboard link made - the old one no longer works. Click Copy phone link.' } -Width 210 -Icon 'rotate' | Out-Null
+[void]$script:AfterShown.Add({ Update-DashNote })

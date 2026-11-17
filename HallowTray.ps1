@@ -90,6 +90,15 @@ $miSession.Add_Click({
 $miAudio = New-Object System.Windows.Forms.ToolStripMenuItem('Switch audio (speakers / headset)   Ctrl+Alt+Home')
 $miAudio.Add_Click({ try { Notify (Switch-AudioSetup) } catch { Notify "Audio switch failed: $($_.Exception.Message)" } })
 [void]$menu.Items.Add($miAudio)
+$miTimer = New-Object System.Windows.Forms.ToolStripMenuItem('Sleep / shut down timer')
+foreach ($opt in @(@('Shut down in 30 minutes', 'shutdown', 30), @('Shut down in 1 hour', 'shutdown', 60), @('Shut down in 2 hours', 'shutdown', 120), @('Shut down in 3 hours', 'shutdown', 180), @('-'),
+        @('Sleep in 30 minutes', 'sleep', 30), @('Sleep in 1 hour', 'sleep', 60), @('Sleep in 2 hours', 'sleep', 120), @('-'), @('Cancel timer', 'cancel', 0))) {
+    if ($opt[0] -eq '-') { [void]$miTimer.DropDownItems.Add('-'); continue }
+    $it = New-Object System.Windows.Forms.ToolStripMenuItem($opt[0]); $it.Tag = @($opt[1], $opt[2])
+    $it.Add_Click({ Set-PowerTimer $this.Tag[0] $this.Tag[1] })
+    [void]$miTimer.DropDownItems.Add($it)
+}
+[void]$menu.Items.Add($miTimer)
 [void]$menu.Items.Add('-')
 $miBoost =New-Object System.Windows.Forms.ToolStripMenuItem('Auto Game Boost')
 $miBoost.CheckOnClick = $true; $miBoost.Checked = [bool]$settings.AutoBoost
@@ -118,10 +127,10 @@ $miStartup.Add_Click({ Set-TrayAtStartup $miStartup.Checked })
 [void]$menu.Items.Add($miStartup)
 [void]$menu.Items.Add('-')
 $miExit = $menu.Items.Add('Exit tray app')
-$miExit.Add_Click({ $timer.Stop(); $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
+$miExit.Add_Click({ $timer.Stop(); $dashTimer.Stop(); if ($script:Dash) { try { $script:Dash.Stop() } catch { } }; $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
 if (Test-IconFont) {
     $ic = [System.Drawing.Color]::FromArgb(70, 60, 90)
-    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miAudio, 'volume-high'), @($miExit, 'power-off'))) {
+    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miAudio, 'volume-high'), @($miTimer, 'moon'), @($miExit, 'power-off'))) {
         $pair[0].Image = Get-Icon $pair[1] $ic 16
     }
 }
@@ -180,6 +189,7 @@ function Complete-TrayServerCheck {
     if (-not $script:SrvJob -or -not $script:SrvJob.H.IsCompleted) { return }
     try { $rows = @($script:SrvJob.PS.EndInvoke($script:SrvJob.H)) } catch { $rows = @() }
     $script:SrvJob.PS.Dispose(); $script:SrvJob = $null
+    $script:DashState.Servers = $rows
     $down = @(); $back = @()
     foreach ($r in $rows) {
         if (-not $r.Key) { continue }
@@ -197,8 +207,60 @@ function Complete-TrayServerCheck {
             if ($st.SeenUp -and $st.Fails -eq 2 -and -not $st.Alerted) { $st.Alerted = $true; $down += "$($r.Name) - $($r.Status)" }
         }
     }
-    if ($down) { $script:AlertPage = 'Server'; Notify ("Server alert: {0}. Click for details." -f ($down -join '; ')) }
-    elseif ($back) { Notify ("Back up: {0}" -f ($back -join ', ')) }
+    if ($down) {
+        $script:AlertPage = 'Server'; Notify ("Server alert: {0}. Click for details." -f ($down -join '; '))
+        if (Get-LinkSetting 'DiscordServer' $true) { Send-DiscordPostAsync 'Server alert' (($down | ForEach-Object { "- $_" }) -join "`n") 0xF05A5A }
+    }
+    elseif ($back) {
+        Notify ("Back up: {0}" -f ($back -join ', '))
+        if (Get-LinkSetting 'DiscordServer' $true) { Send-DiscordPostAsync 'Back up' ($back -join ', ') 0x6ED28C }
+    }
+}
+
+# ---- phone dashboard: read-only status page on the Tailscale address (Server tab > Phone dashboard)
+$script:DashState = @{ InGame = $null; GameStart = Get-Date; Servers = @(); Timer = $null }
+$script:Dash = $null; $script:DashIP = $null
+function Update-Dashboard {
+    $want = Get-LinkSetting 'PhoneDashboard' $false
+    $ip = $(if ($want) { Get-TailscaleIP })
+    if ($script:Dash -and (-not $want -or $ip -ne $script:DashIP)) { try { $script:Dash.Stop() } catch { }; $script:Dash = $null; Log '[tray] Phone dashboard stopped.' }
+    if ($want -and $ip -and -not $script:Dash) {
+        $script:Dash = Start-DashboardListener $ip; $script:DashIP = $ip
+        if ($script:Dash) { Log "[tray] Phone dashboard on at http://${ip}:$DashPort/ (key hidden)" } else { Log '[tray] Phone dashboard could not start (port 5190 in use?).' }
+    }
+}
+$dashTimer = New-Object System.Windows.Forms.Timer
+$dashTimer.Interval = 300
+$dashTimer.Add_Tick({ if ($script:Dash) { try { Invoke-DashboardPoll $script:Dash $script:DashState } catch { Log "[tray] dashboard: $($_.Exception.Message)" } } })
+$dashTimer.Start()
+
+# ---- sleep / shut down timer (tray menu)
+$script:PowerTimer = $null
+function Set-PowerTimer([string]$Action, [int]$Minutes) {
+    if ($Action -eq 'cancel') {
+        if ($script:PowerTimer -and $script:PowerTimer.Fired) { & shutdown.exe /a 2>$null }
+        $script:PowerTimer = $null; $script:DashState.Timer = $null; $miTimer.Text = 'Sleep / shut down timer'; Notify 'Timer cancelled.'; return
+    }
+    $at = (Get-Date).AddMinutes($Minutes)
+    $script:PowerTimer = @{ Action = $Action; At = $at; Warned = $false; Fired = $false; Postponed = $false }
+    $label = "{0} at {1:h:mm tt}" -f $(if ($Action -eq 'shutdown') { 'Shut down' } else { 'Sleep' }), $at
+    $script:DashState.Timer = $label; $miTimer.Text = "Timer: $label"
+    Notify "$label. Right-click the tray icon > Timer > Cancel to stop it."
+}
+function Test-PowerTimer {
+    $t = $script:PowerTimer; if (-not $t -or $t.Fired) { return }
+    $left = ($t.At - (Get-Date)).TotalSeconds
+    if ($left -le 0 -and $script:InGame -and -not $t.Postponed) {
+        $t.At = (Get-Date).AddMinutes(15); $t.Warned = $false; $t.Postponed = $true
+        $script:DashState.Timer = "{0} at {1:h:mm tt}" -f $(if ($t.Action -eq 'shutdown') { 'Shut down' } else { 'Sleep' }), $t.At; $miTimer.Text = "Timer: $($script:DashState.Timer)"
+        Notify "You're still playing $($script:InGame) - timer moved 15 minutes."; return
+    }
+    if ($left -le 60 -and -not $t.Warned) { $t.Warned = $true; Notify ("{0} in 1 minute. Right-click the tray icon > Timer > Cancel to stop." -f $(if ($t.Action -eq 'shutdown') { 'Shutting down' } else { 'Going to sleep' })) }
+    if ($left -le 0) {
+        $t.Fired = $true; $miTimer.Text = 'Sleep / shut down timer'; $script:DashState.Timer = $null
+        if ($t.Action -eq 'shutdown') { Log '[tray] Timer: shutting down.'; & shutdown.exe /s /t 30 /c 'Hallow Toolkit timer - shutting down in 30 seconds.' }
+        else { Log '[tray] Timer: sleep.'; $script:PowerTimer = $null; [void][System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false) }
+    }
 }
 
 # ---- auto game boost loop
@@ -231,8 +293,12 @@ $timer.Add_Tick({
                 Notify ("GPU is running hot: {0:N0} C in {1}. Check case fans and dust, or cap your FPS in the game." -f $gt, $script:InGame)
             }
         }
+        $script:DashState.InGame = $script:InGame
+        if ($script:Ticks % 12 -eq 1) { Update-Dashboard }   # every minute: start/stop the phone dashboard to match the setting
+        Test-PowerTimer
         if ($g -and -not $script:InGame) {
             $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
+            $script:DashState.InGame = $g.Name; $script:DashState.GameStart = Get-Date
             $script:SessStart = Get-Date; $script:Samples = New-Object System.Collections.Generic.List[object]
             if ($miPrio.Checked) { $pn = Set-GamePriority $g.Id; if ($pn) { Log "[tray] $pn set to High priority" } }
             $s = Get-Settings
@@ -255,6 +321,7 @@ $timer.Add_Tick({
                         if ($null -ne $sum.GpuAvg) { $bits += ('GPU avg {0:N0}%' -f $sum.GpuAvg) }
                         if ($null -ne $sum.VramMax) { $bits += ('VRAM {0:N1} GB' -f $sum.VramMax) }
                         Notify ("Session saved - {0}: {1}. See Games tab." -f $name, ($bits -join ', '))
+                        if (Get-LinkSetting 'DiscordSessions' $true) { Send-DiscordPostAsync "Played $name" ($bits -join ' | ') 0xA98BE0 }
                     }
                 }
                 $s = Get-Settings

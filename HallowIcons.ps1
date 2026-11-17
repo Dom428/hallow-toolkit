@@ -27,6 +27,7 @@ $Fa = @{
     'rotate' = 0xf2f1; 'database' = 0xf1c0; 'eraser' = 0xf12d; 'keyboard' = 0xf11c; 'fire' = 0xf06d; 'star' = 0xf005
     'house' = 0xf015; 'circle-info' = 0xf05a; 'box-archive' = 0xf187; 'list' = 0xf03a; 'terminal' = 0xf120
     'lock' = 0xf023; 'location-dot' = 0xf3c5; 'microphone' = 0xf130; 'camera' = 0xf030; 'clipboard' = 0xf328
+    'comments' = 0xf086; 'link' = 0xf0c1; 'link-slash' = 0xf127; 'mobile-screen' = 0xf3cf
     'headphones' = 0xf025; 'truck-moving' = 0xf4df; 'wave-square' = 0xf83e
     'circle-question' = 0xf059; 'cloud' = 0xf0c2; 'moon' = 0xf186; 'window-maximize' = 0xf2d0; 'hourglass-half' = 0xf252
 }
