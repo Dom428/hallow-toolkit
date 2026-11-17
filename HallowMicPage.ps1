@@ -42,7 +42,7 @@ function Update-MicMeter {
     $p = [double]$script:Meter.Peak()
     $script:MeterPeak = [math]::Max($p, $script:MeterPeak * 0.85)            # smooth the fall
     $shown = [math]::Sqrt($script:MeterPeak)                                  # sqrt so normal speech isn't a sliver
-    $meterBar.Width = [int](860 * [math]::Min(1, $shown))
+    $meterBar.Width = [int](860 * [math]::Min(1.0, $shown))
     $meterBar.BackColor = if ($shown -ge 0.97) { $C.Bad } elseif ($shown -ge 0.5) { $C.Good } else { $C.Warn }
     if ($shown -gt $script:MeterHold -or ((Get-Date) - $script:MeterHoldAt).TotalSeconds -gt 3) { $script:MeterHold = $shown; $script:MeterHoldAt = Get-Date }
     $verdict = if ($script:MeterHold -lt 0.05) { 'silent - talk to test' } elseif ($script:MeterHold -lt 0.5) { 'QUIET - games will hear you faintly' } elseif ($script:MeterHold -lt 0.97) { 'good' } else { 'clipping - too loud, lower Boost or gain' }

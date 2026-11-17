@@ -259,7 +259,7 @@ function Show-DiskMap([string]$Root) {
         $st.Rects = @()
         for ($i = 0; $i -lt $sorted.Count; $i++) {
             $r = $rects[$i]; $it = $sorted[$i]
-            $inner = New-Object System.Drawing.RectangleF(($r.X + 1), ($r.Y + 1), [math]::Max(0, $r.Width - 2), [math]::Max(0, $r.Height - 2))   # 2px surface gap between tiles
+            $inner = New-Object System.Drawing.RectangleF(($r.X + 1), ($r.Y + 1), [math]::Max(0.0, $r.Width - 2), [math]::Max(0.0, $r.Height - 2))   # 2px surface gap between tiles
             $fill = if (-not $it.Dir) { $C.PanelHi } elseif ($i -eq $st.Hover) { RGB 92 158 236 } else { $ChartBlue }
             $g.FillRectangle((New-Object System.Drawing.SolidBrush $fill), $inner)
             if ($inner.Width -gt 70 -and $inner.Height -gt 34) {

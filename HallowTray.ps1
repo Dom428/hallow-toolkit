@@ -99,6 +99,10 @@ $miRecord.CheckOnClick = $true
 $miRecord.Checked = -not ($settings.PSObject.Properties.Name -contains 'RecordSessions' -and $settings.RecordSessions -eq $false)
 $miRecord.Add_Click({ $s = Get-Settings; $s | Add-Member RecordSessions $miRecord.Checked -Force; Save-Settings $s })
 [void]$menu.Items.Add($miRecord)
+$miPrio = New-Object System.Windows.Forms.ToolStripMenuItem('Game priority boost (High CPU priority)')
+$miPrio.CheckOnClick = $true; $miPrio.Checked = -not ($settings.PSObject.Properties.Name -contains 'GamePriority' -and $settings.GamePriority -eq $false)
+$miPrio.Add_Click({ $s = Get-Settings; $s | Add-Member GamePriority $miPrio.Checked -Force; Save-Settings $s })
+[void]$menu.Items.Add($miPrio)
 $miPanic = New-Object System.Windows.Forms.ToolStripMenuItem('Panic key: Ctrl+Alt+End')
 $miPanic.CheckOnClick = $true; $miPanic.Checked = [bool]$settings.PanicHotkey
 $miPanic.Add_Click({ $s = Get-Settings; $s.PanicHotkey = $miPanic.Checked; Save-Settings $s })
@@ -221,6 +225,7 @@ $timer.Add_Tick({
         if ($g -and -not $script:InGame) {
             $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
             $script:SessStart = Get-Date; $script:Samples = New-Object System.Collections.Generic.List[object]
+            if ($miPrio.Checked) { $pn = Set-GamePriority $g.Id; if ($pn) { Log "[tray] $pn set to High priority" } }
             $s = Get-Settings
             if ($s.AutoBoost -and $s.BoostApps.Count) {
                 $running = @($s.BoostApps | Where-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue })

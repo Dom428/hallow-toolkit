@@ -14,7 +14,7 @@ function Get-SessionSample {
         try { $script:SessCpu = New-Object System.Diagnostics.PerformanceCounter('Processor Information', '% Processor Utility', '_Total'); [void]$script:SessCpu.NextValue() } catch { }
     }
     $s = [ordered]@{ t = (Get-Date).ToString('o'); cpu = $null; ram = $null; gpu = $null; gtemp = $null; vram = $null; watts = $null; ctemp = $null }
-    if ($script:SessCpu) { $s.cpu = [math]::Round([math]::Min(100, $script:SessCpu.NextValue()), 1) }
+    if ($script:SessCpu) { $s.cpu = [math]::Round([math]::Min(100.0, $script:SessCpu.NextValue()), 1) }
     $os = Get-CimInstance Win32_OperatingSystem -Property TotalVisibleMemorySize, FreePhysicalMemory
     $s.ram = [math]::Round(($os.TotalVisibleMemorySize - $os.FreePhysicalMemory) / 1MB, 2)
     if ($NvSmi) {

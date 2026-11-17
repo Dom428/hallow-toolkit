@@ -9,6 +9,18 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 4.0
+- Storage tab > Game launcher caches: Steam, Epic, Battle.net, EA, Ubisoft, Riot, GOG, Discord
+  and Medal keep web and download caches that grow to GBs. Clear them in one click - games,
+  saves, settings and logins are never touched, and open launchers are skipped.
+- Gaming tab > Controller check: live buttons, sticks and triggers for Xbox-style controllers,
+  stick drift measured at rest, and battery level.
+- Tray app: Game priority boost - your game runs at High CPU priority (turn it off in the tray menu).
+- Network tab > Saved Wi-Fi passwords: see and copy the password of any network this PC has
+  joined. Shown only in that window, never written to the log.
+- Fixes: the Mic tab's live meter jumped between empty and full instead of following your voice;
+  Monitor CPU/network bars and recorded game-session CPU were rounded to whole numbers.
+
 WHAT'S NEW IN 3.9.1
 - Cleaner buttons: the icon sits in its own column with a gap, the title is bold and the
   description is smaller and dimmer underneath.

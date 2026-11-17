@@ -234,9 +234,9 @@ $script:ToolPaint = {
     }
     $parts = "$($s.Text)" -split "`n", 2
     $title = $parts[0]; $desc = $(if ($parts.Count -gt 1) { $parts[1] } else { '' })
-    $tc = if (-not $s.Enabled) { $C.Muted } elseif ($prim) { $C.AccentText } else { $C.Text }
     # description colour: muted on panels; on the accent button, text colour blended 25% toward the background
     $dc = if ($prim) { [System.Drawing.Color]::FromArgb([int]($C.AccentText.R * 0.75 + $bg.R * 0.25), [int]($C.AccentText.G * 0.75 + $bg.G * 0.25), [int]($C.AccentText.B * 0.75 + $bg.B * 0.25)) } else { $C.Muted }
+    $tc = if ($prim) { if ($s.Enabled) { $C.AccentText } else { $dc } } elseif ($s.Enabled) { $C.Text } else { $C.Muted }
     $tw = $w - $x - 10
     $flagsT = [System.Windows.Forms.TextFormatFlags]'Left, Top, SingleLine, EndEllipsis, NoPrefix'
     $flagsD = [System.Windows.Forms.TextFormatFlags]'Left, Top, WordBreak, EndEllipsis, NoPrefix'
@@ -411,7 +411,7 @@ function Add-Tile($Flow, [string]$Key, [string]$Title) {
 function Set-Tile([string]$Key, [string]$Value, [string]$Sub, [double]$Pct, [double]$WarnAt = 75, [double]$BadAt = 90) {
     $t = $tiles[$Key]; if (-not $t) { return }
     $t.Value.Text = $Value; $t.Sub.Text = $Sub
-    $pct = [math]::Max(0, [math]::Min(100, $Pct))
+    $pct = [math]::Max(0.0, [math]::Min(100.0, $Pct))
     $t.Fill.Width = [int](250 * $pct / 100)
     $t.Fill.BackColor = $(if ($pct -ge $BadAt) { $C.Bad } elseif ($pct -ge $WarnAt) { $C.Warn } else { $C.Accent })
 }
@@ -447,7 +447,7 @@ $script:lhmMissSince = $null
 function Update-Monitor {
     Initialize-Monitor
     if ($cpuCounter) {
-        $cpu = [math]::Min(100, $cpuCounter.NextValue())
+        $cpu = [math]::Min(100.0, $cpuCounter.NextValue())
         Set-Tile 'cpu' ('{0:N0}%' -f $cpu) "$env:NUMBER_OF_PROCESSORS threads" $cpu
     }
     if (-not $script:lhmMissSince -or ((Get-Date) - $script:lhmMissSince).TotalSeconds -gt 30) {
@@ -480,7 +480,7 @@ function Update-Monitor {
                 if ($r -gt $down) { $down = $r }; if ($s -gt $upl) { $upl = $s }
             } catch { }
         }
-        Set-Tile 'net' ('{0:N1} Mb/s' -f ($down * 8 / 1MB)) ('down  |  {0:N1} Mb/s up' -f ($upl * 8 / 1MB)) ([math]::Min(100, $down * 8 / 1MB / 10))
+        Set-Tile 'net' ('{0:N1} Mb/s' -f ($down * 8 / 1MB)) ('down  |  {0:N1} Mb/s up' -f ($upl * 8 / 1MB)) ([math]::Min(100.0, $down * 8 / 1MB / 10))
     }
     if ($script:monTick % 5 -eq 0) {
         foreach ($d in Get-DriveSpace) {
@@ -985,6 +985,7 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 . (Join-Path $PSScriptRoot 'HallowDriverPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowAppsPage.ps1')
+. (Join-Path $PSScriptRoot 'HallowGameExtrasPage.ps1')
 
 # ================================================================ PAGE: TOOLS
 $f = Add-Page 'Tools' ([char]0x2692) 'Handy Windows tools in one place'
