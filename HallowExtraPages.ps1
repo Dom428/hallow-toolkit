@@ -125,7 +125,7 @@ Add-Tool $f 'Change backup folder' 'Pick where zips go' {
         $saveNote.Text = "Backups go to: $($fb.SelectedPath)  (newest 5 kept)"; Log "Game-save backups will go to $($fb.SelectedPath)"
     }
 } -Width 210 | Out-Null
-Add-Tool $f 'Weekly auto backup' 'Turn on / off (Saturdays)' { Invoke-ToggleSaveBackupTask } -Width 210 | Out-Null
+Add-Tool $f 'Weekly auto backup' 'Saturdays 4 AM' { Invoke-ToggleSaveBackupTask } -Width 210 -State { [bool](Get-ScheduledTask -TaskName $SaveTaskName -ErrorAction SilentlyContinue) } | Out-Null
 Add-Tool $f 'Open backups' 'Browse backup zips' { $d = Get-DefaultBackupDir; New-Item -ItemType Directory -Force $d | Out-Null; Start-Process explorer.exe $d } -Width 210 | Out-Null
 
 Add-Section $f 'Clips & screenshots'
@@ -315,17 +315,33 @@ Add-Tool $f 'Disk map' 'See what fills the drive, visually' {
 # ================================================================ PAGE: TWEAKS
 $f = Add-Page 'Tweaks' ([char]0x2699) 'Privacy, quality-of-life, debloat, startup apps and background services'
 $script:TweakBoxes = @()
+$script:TweakLabels = @{}   # checkbox -> status label
+$script:TweakNow = @{}      # checkbox -> what the PC is actually set to
 $lastGroup = ''
 foreach ($t in $Tweaks) {
     if ($t.Group -ne $lastGroup) { Add-Section $f $t.Group; $lastGroup = $t.Group }
     $cb = New-Object System.Windows.Forms.CheckBox
-    $cb.Text = $t.Name; $cb.Tag = $t; $cb.Width = 430; $cb.Height = 28; $cb.ForeColor = $C.Text; $cb.UseMnemonic = $false
-    $cb.Margin = New-Object System.Windows.Forms.Padding(2, 0, 10, 0)
+    $cb.Text = $t.Name; $cb.Tag = $t; $cb.Width = 344; $cb.Height = 28; $cb.ForeColor = $C.Text; $cb.UseMnemonic = $false
+    $cb.Margin = New-Object System.Windows.Forms.Padding(2, 0, 0, 0)
     if ($t.Admin -and -not $IsAdmin) { $cb.ForeColor = $C.Muted }
-    $f.Controls.Add($cb); $script:TweakBoxes += $cb
+    # status label: what the PC is set to right now, or what Apply will change
+    $st = New-Object System.Windows.Forms.Label
+    $st.AutoSize = $false; $st.Width = 84; $st.Height = 28; $st.TextAlign = 'MiddleLeft'; $st.UseMnemonic = $false
+    $st.Font = New-Font 8.25 'Bold'; $st.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 0)
+    $cb.Add_CheckedChanged({ Update-TweakStatus $this })
+    $f.Controls.Add($cb); $f.Controls.Add($st); $script:TweakBoxes += $cb; $script:TweakLabels[$cb] = $st
 }
-function Update-TweakBoxes { foreach ($cb in $script:TweakBoxes) { $cb.Checked = (Test-Tweak $cb.Tag) } }
-Add-Note $f 'Ticked = on. Change the ticks, then click Apply. Undo puts every switch back to the Windows default.' | Out-Null
+function Update-TweakStatus($cb) {
+    $st = $script:TweakLabels[$cb]; if (-not $st -or -not $script:TweakNow.ContainsKey($cb)) { return }
+    $now = $script:TweakNow[$cb]
+    if ($cb.Checked -ne $now) { $st.Text = $(if ($cb.Checked) { 'will be ON' } else { 'will be OFF' }); $st.ForeColor = $C.Warn }
+    elseif ($now) { $st.Text = "$([char]0x25CF) ON now"; $st.ForeColor = $C.Good }
+    else { $st.Text = 'off'; $st.ForeColor = $C.Muted }
+}
+function Update-TweakBoxes {
+    foreach ($cb in $script:TweakBoxes) { $on = [bool](Test-Tweak $cb.Tag); $script:TweakNow[$cb] = $on; $cb.Checked = $on; Update-TweakStatus $cb }
+}
+Add-Note $f 'Green "ON now" = already set on this PC. Yellow = a change you haven''t applied yet - click Apply. Undo = Windows defaults.' | Out-Null
 Add-Tool $f 'Apply changes' 'Apply the ticks above' {
     $changed = 0; $explorer = $false
     foreach ($cb in $script:TweakBoxes) {

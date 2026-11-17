@@ -230,14 +230,14 @@ Add-Tool $f 'Mic Boost off' 'If you hear hiss or clipping' {
 Add-Tool $f 'Stop call ducking' 'Windows won''t lower sounds on calls' {
     Set-CallDuckingOff; Log 'Windows will no longer turn sounds down during calls.'; Update-MicNote
 } -Width 210 | Out-Null
-Add-Tool $f 'Keep my mic level' 'Tray app puts it back if lowered (on/off)' {
+Add-Tool $f 'Keep my mic level' 'Tray app puts it back if lowered' {
     $s = Get-Settings; $on = -not [bool]$s.KeepMicLevel
     $s | Add-Member KeepMicLevel $on -Force; Save-Settings $s
     if ($on) {
         Log "Keep my mic level: ON. The tray app checks every 30 seconds and puts your mics back to your levels if Discord or anything else lowers it."
         if (-not (Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object CommandLine -like '*HallowTray.ps1*')) { Start-TrayApp }
     } else { Log 'Keep my mic level: OFF.' }
-} -Width 210 | Out-Null
+} -Width 210 -State { [bool](Get-Settings).KeepMicLevel } | Out-Null
 Add-Tool $f 'Windows sound settings' 'Recording tab (old Control Panel)' { Start-Process control.exe 'mmsys.cpl,,1' } -Width 210 | Out-Null
 Add-Tool $f 'Mic privacy settings' 'Let games use the mic' { Start-Process 'ms-settings:privacy-microphone' } -Width 210 | Out-Null
 

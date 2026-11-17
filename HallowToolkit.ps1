@@ -218,6 +218,15 @@ $tips = New-Object System.Windows.Forms.ToolTip
 $script:PrimaryButtons = New-Object 'System.Collections.Generic.HashSet[object]'
 $script:BtnTitleFont = New-Object System.Drawing.Font('Segoe UI Semibold', [float]9.75, [System.Drawing.FontStyle]::Regular)
 $script:BtnDescFont = New-Object System.Drawing.Font('Segoe UI', [float]8.75, [System.Drawing.FontStyle]::Regular)
+$script:BtnPillFont = New-Object System.Drawing.Font('Segoe UI', [float]7.5, [System.Drawing.FontStyle]::Bold)
+$script:ToggleStates = @{}   # button -> scriptblock returning $true when the setting is on
+$script:ToggleCache = @{}    # button -> last known state (painted as the ON/OFF pill)
+function Update-ToggleStates {
+    foreach ($b in @($script:ToggleStates.Keys)) {
+        try { $script:ToggleCache[$b] = [bool](& $script:ToggleStates[$b]) } catch { [void]$script:ToggleCache.Remove($b) }
+        $b.Invalidate()
+    }
+}
 $script:ToolPaint = {
     param($s, $e)
     $g = $e.Graphics; $w = $s.Width; $h = $s.Height
@@ -238,6 +247,16 @@ $script:ToolPaint = {
     $dc = if ($prim) { [System.Drawing.Color]::FromArgb([int]($C.AccentText.R * 0.75 + $bg.R * 0.25), [int]($C.AccentText.G * 0.75 + $bg.G * 0.25), [int]($C.AccentText.B * 0.75 + $bg.B * 0.25)) } else { $C.Muted }
     $tc = if ($prim) { if ($s.Enabled) { $C.AccentText } else { $dc } } elseif ($s.Enabled) { $C.Text } else { $C.Muted }
     $tw = $w - $x - 10
+    # on/off switches: a pill in the top-right corner shows the current state
+    if ($script:ToggleCache.ContainsKey($s)) {
+        $on = $script:ToggleCache[$s]
+        $pt = $(if ($on) { 'ON' } else { 'OFF' })
+        $pw = 38; $ph = 18; $pr = New-Object System.Drawing.Rectangle(($w - $pw - 8), 7, $pw, $ph)
+        $pb = New-Object System.Drawing.SolidBrush($(if ($on) { $C.Good } elseif ($prim) { $C.AccentHover } else { $C.Bg }))
+        $g.FillRectangle($pb, $pr); $pb.Dispose()
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $pt, $script:BtnPillFont, $pr, $(if ($on) { $C.Bg } else { $C.Muted }), [System.Windows.Forms.TextFormatFlags]'HorizontalCenter, VerticalCenter, SingleLine, NoPrefix')
+        $tw -= ($pw + 6)
+    }
     $flagsT = [System.Windows.Forms.TextFormatFlags]'Left, Top, SingleLine, EndEllipsis, NoPrefix'
     $flagsD = [System.Windows.Forms.TextFormatFlags]'Left, Top, WordBreak, EndEllipsis, NoPrefix'
     $th = [System.Windows.Forms.TextRenderer]::MeasureText($g, $title, $script:BtnTitleFont, (New-Object System.Drawing.Size($tw, 100)), $flagsT).Height
@@ -246,7 +265,7 @@ $script:ToolPaint = {
     [System.Windows.Forms.TextRenderer]::DrawText($g, $title, $script:BtnTitleFont, (New-Object System.Drawing.Rectangle($x, $y, $tw, $th)), $tc, $flagsT)
     if ($desc) { [System.Windows.Forms.TextRenderer]::DrawText($g, $desc, $script:BtnDescFont, (New-Object System.Drawing.Rectangle($x, ($y + $th + 1), $tw, $dh)), $dc, $bg, $flagsD) }
 }
-function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [switch]$Primary, [int]$Width = 278, [string]$Icon) {
+function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [switch]$Primary, [int]$Width = 278, [string]$Icon, [scriptblock]$State) {
     $b = New-Object System.Windows.Forms.Button
     $b.UseMnemonic = $false; $b.Text = "$Title`n$Desc"
     if (Test-IconFont) {
@@ -266,13 +285,14 @@ function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [s
     $b.Font = New-Font 9.5 $(if ($Primary) { 'Bold' } else { 'Regular' })
     $b.Cursor = [System.Windows.Forms.Cursors]::Hand
     $b.Tag = $Action
+    if ($State) { $script:ToggleStates[$b] = $State; $Desc = "$Desc. The pill shows whether it's on right now - click to switch." }
     $tips.SetToolTip($b, $Desc)
     $b.Add_Click({
         $act = $this.Tag
         foreach ($x in $allButtons) { $x.Enabled = $false }
         $form.UseWaitCursor = $true
         try { & $act } catch { Log "ERROR: $($_.Exception.Message) (line $($_.InvocationInfo.ScriptLineNumber))" }
-        finally { $form.UseWaitCursor = $false; foreach ($x in $allButtons) { $x.Enabled = $true } }
+        finally { $form.UseWaitCursor = $false; foreach ($x in $allButtons) { $x.Enabled = $true }; if ($script:ToggleStates.ContainsKey($this)) { Update-ToggleStates } }
     })
     $Flow.Controls.Add($b); $allButtons.Add($b)
     $b
@@ -327,6 +347,7 @@ $jobTimer.Start()
 # ================================================================ PAGE: TUNE-UP
 $script:Drives = @(Get-DriveSpace)
 $script:AfterShown = New-Object System.Collections.ArrayList   # slow list-filling runs right after the window appears
+[void]$script:AfterShown.Add({ Update-ToggleStates })
 $f = Add-Page 'Tune-up' ([char]0x2726) 'Clean junk, check health and keep Windows up to date'
 Add-Section $f 'One click'
 Add-Tool $f 'Quick Clean-up' 'Temp files, caches, DNS, SSD TRIM' { Invoke-QuickClean $script:recycle.Checked } -Primary | Out-Null
@@ -382,7 +403,7 @@ function Install-AppUpdates {
 [void]$script:AfterShown.Add({ Start-AppUpdateCheck -Quiet })
 [void]$script:AfterShown.Add({ if (-not (Test-Path $IconFontFile)) { Start-Background 'Icon font' $IconFontFetchWork @($IconFontUrl, $IconFontFile, $IconFontSha) { param($o) foreach ($l in $o) { Log "$l" } } } })
 Add-Section $f 'Automatic'
-Add-Tool $f 'Weekly auto clean-up' 'Turn on / off (Sundays 3 AM)' { Invoke-ToggleWeeklyClean } | Out-Null
+Add-Tool $f 'Weekly auto clean-up' 'Sundays 3 AM' { Invoke-ToggleWeeklyClean } -State { [bool](Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) } | Out-Null
 Add-Tool $f 'Startup apps' 'Choose what launches with Windows' { Start-Process 'ms-settings:startupapps'; Log 'Opened Startup apps.' } | Out-Null
 
 # ================================================================ PAGE: MONITOR
@@ -637,7 +658,7 @@ Add-Tool $side 'Save as Auto Boost list' 'Tray app closes these when a game star
 Add-Section $f 'Auto Game Boost + panic key (tray app)'
 Add-Note $f 'The tray app (orange H by the clock) closes your Auto Boost apps when a game starts and reopens them after. Ctrl+Alt+End force-closes a frozen game.' | Out-Null
 Add-Tool $f 'Start tray app' 'Auto Game Boost + panic key' { Start-TrayApp } -Primary | Out-Null
-Add-Tool $f 'Tray app with Windows' 'Turn on / off at startup' { Set-TrayAtStartup (-not (Test-TrayAtStartup)) } | Out-Null
+Add-Tool $f 'Tray app with Windows' 'Starts by itself when you sign in' { Set-TrayAtStartup (-not (Test-TrayAtStartup)) } -State { Test-TrayAtStartup } | Out-Null
 Add-Tool $f 'Game Mode settings' 'Windows gaming options' { Start-Process 'ms-settings:gaming-gamemode' } | Out-Null
 
 # ================================================================ PAGE: GAMES
@@ -771,12 +792,10 @@ Add-Tool $f 'Remove / hide' 'Selected row' {
     $r = Get-SelectedServer; if ($r) { Remove-ServerRow $r; Start-ServerCheck }
 } -Width 210 -Icon 'eye-slash' | Out-Null
 Add-Tool $f 'Show hidden apps' 'Bring hidden apps back' { Show-HiddenServerApps; Log 'Hidden apps will show again.'; Start-ServerCheck } -Width 210 -Icon 'list' | Out-Null
-$script:SrvAlertBtn = Add-Tool $f 'Tray alerts: ON' 'Pop-up when something goes down' {
+Add-Tool $f 'Tray alerts' 'Pop-up when something goes down' {
     $s = Get-Settings; $s.ServerAlerts = -not $s.ServerAlerts; Save-Settings $s
-    $script:SrvAlertBtn.Text = "Tray alerts: $(if ($s.ServerAlerts) { 'ON' } else { 'OFF' })`nPop-up when something goes down"
     Log ("Server alerts from the tray app are now {0}. The tray checks every 5 minutes." -f $(if ($s.ServerAlerts) { 'on' } else { 'off' }))
-} -Width 210 -Icon 'triangle-exclamation'
-if (-not (Get-Settings).ServerAlerts) { $script:SrvAlertBtn.Text = "Tray alerts: OFF`nPop-up when something goes down" }
+} -Width 210 -Icon 'triangle-exclamation' -State { [bool](Get-Settings).ServerAlerts } | Out-Null
 Add-Note $f 'Apps are found automatically (Radarr, Sonarr, Prowlarr, Jellyfin, Emby, Plex, qBittorrent, Tailscale...). Servers you add stay on this PC only.' | Out-Null
 if (-not $script:PageShowHooks) { $script:PageShowHooks = @{} }
 $script:PageShowHooks['Server'] = { Start-ServerCheck }
@@ -1028,7 +1047,7 @@ Add-Note $f 'Top row: accent colour for buttons, icons and highlights. Bottom ro
 
 Add-Section $f 'Toolkit updates'
 Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
-Add-Tool $f 'Auto update check' 'Turn on / off (checks at launch)' { Switch-AutoUpdate } | Out-Null
+Add-Tool $f 'Auto update check' 'Checks when the toolkit opens' { Switch-AutoUpdate } -State { [bool](Get-Settings).AutoUpdate } | Out-Null
 Add-Section $f 'Share your setup (tweaks + Boost list + toolkit settings)'
 Add-Tool $f 'Export my setup' 'Save a file to send to a friend' {
     $d = New-Object System.Windows.Forms.SaveFileDialog

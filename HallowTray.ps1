@@ -78,11 +78,13 @@ $miClean.Add_Click({
     Notify 'Quick Clean-up is running in the background.'
 })
 $miSession = New-Object System.Windows.Forms.ToolStripMenuItem('Game session')
-$miSession.Checked = [bool](Get-GameSession)
+# the rocket icon hides the tick mark, so the text says whether a session is on
+function Update-SessionItem { $on = [bool](Get-GameSession); $miSession.Checked = $on; $miSession.Text = $(if ($on) { 'Game session: ON  (click to end)' } else { 'Start game session' }) }
+Update-SessionItem
 $miSession.Add_Click({
     if (Get-GameSession) { Stop-GameSession; Notify 'Game session ended - power plan, updates and apps are back to normal.' }
     else { Start-GameSession; Notify 'Game session on - Boost apps closed, High performance power. Click again when done.' }
-    $miSession.Checked = [bool](Get-GameSession)
+    Update-SessionItem
 })
 [void]$menu.Items.Add($miSession)
 [void]$menu.Items.Add('-')
