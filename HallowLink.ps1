@@ -65,6 +65,21 @@ function Invoke-Mixer([string]$PathAndQuery) {
     $a = Get-MixerApi; if (-not $a) { return $null }
     try { Invoke-RestMethod "http://127.0.0.1:$($a.port)$PathAndQuery" -Headers @{ 'X-Hallow-Key' = "$($a.key)" } -TimeoutSec 2 -UseBasicParsing } catch { $null }
 }
+# Sends a shared Hallow Mixer setup to the mixer (opens it first, as you, if it isn't running). Returns its message.
+function Send-MixerShare($Mix) {
+    if (-not (Get-MixerApi) -or -not (Invoke-Mixer '/state')) {
+        if (-not (Test-Path $MixerExe)) { return 'Hallow Mixer is not installed - install it from the Server tab, then import again.' }
+        Start-Process explorer.exe "`"$MixerExe`""
+        $end = (Get-Date).AddSeconds(20)
+        while ((Get-Date) -lt $end -and -not (Invoke-Mixer '/state')) { Start-Sleep -Milliseconds 500 }
+    }
+    $a = Get-MixerApi; if (-not $a) { return 'Hallow Mixer did not answer (is "Let Hallow Toolkit control the mixer" on in its Settings?).' }
+    $json = $Mix | ConvertTo-Json -Depth 10 -Compress
+    try {
+        $r = Invoke-RestMethod "http://127.0.0.1:$($a.port)/share-apply" -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($json)) -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Hallow-Key' = "$($a.key)" } -TimeoutSec 10 -UseBasicParsing
+        "$($r.msg)"
+    } catch { "Hallow Mixer did not take it: $($_.Exception.Message)" }
+}
 $MixerInstallWork = {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     try { $r = Invoke-RestMethod 'https://api.github.com/repos/Dom428/hallow-mixer/releases/latest' -Headers @{ 'User-Agent' = 'HallowToolkit'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 20 }

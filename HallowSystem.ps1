@@ -301,8 +301,12 @@ function Export-HallowSetup([string]$File) {
     $out = [ordered]@{ HallowSetup = 1; From = "Hallow Toolkit v$AppVersion"; Created = (Get-Date).ToString('yyyy-MM-dd HH:mm'); Settings = [ordered]@{}; TweaksOn = @() }
     foreach ($n in $ShareableSettings) { if ($s.PSObject.Properties.Name -contains $n) { $out.Settings[$n] = $s.$n } }
     $out.TweaksOn = @($Tweaks | Where-Object { Test-Tweak $_ } | ForEach-Object { $_.Id })
-    $out | ConvertTo-Json -Depth 5 | Set-Content $File -Encoding UTF8
+    $mix = Invoke-Mixer '/share'   # Hallow Mixer's presets, app choices, switches and EQ (no devices, no OBS details)
+    if ($mix) { $out.Mixer = $mix }
+    $out | ConvertTo-Json -Depth 12 | Set-Content $File -Encoding UTF8
     Log ("Saved your setup to {0}: {1} tweaks on, Boost list: {2}" -f $File, $out.TweaksOn.Count, (@($s.BoostApps) -join ', '))
+    if ($mix) { Log ("Hallow Mixer settings included: {0} presets, {1} app choices{2}" -f @($mix.Presets).Count, @($mix.AppChannel.PSObject.Properties).Count, $(if ($mix.HeadsetEq -or $mix.MicEq) { ', EQ' } else { '' })) }
+    elseif (Test-Path $MixerExe) { Log 'Hallow Mixer settings not included - open Hallow Mixer and export again to add them.' }
 }
 
 # Returns a plan (what would change) without changing anything.
@@ -317,7 +321,7 @@ function Read-HallowSetup([string]$File) {
     [pscustomobject]@{ Source = $j; TurnOn = $turnOn; TurnOff = $turnOff }
 }
 
-function Import-HallowSetup($Plan, [bool]$AlsoTurnOff) {
+function Import-HallowSetup($Plan, [bool]$AlsoTurnOff, [bool]$ImportMixer = $true) {
     $s = Get-Settings
     foreach ($p in $Plan.Source.Settings.PSObject.Properties) {
         if ($ShareableSettings -contains $p.Name) { $s | Add-Member -NotePropertyName $p.Name -NotePropertyValue $p.Value -Force }
@@ -326,4 +330,5 @@ function Import-HallowSetup($Plan, [bool]$AlsoTurnOff) {
     Log ("Toolkit settings imported (Boost list: {0})" -f (@($s.BoostApps) -join ', '))
     foreach ($t in $Plan.TurnOn) { Set-Tweak $t $true }
     if ($AlsoTurnOff) { foreach ($t in $Plan.TurnOff) { Set-Tweak $t $false } }
+    if ($ImportMixer -and $Plan.Source.Mixer) { Log ('Hallow Mixer: ' + (Send-MixerShare $Plan.Source.Mixer)) }
 }

@@ -1059,7 +1059,7 @@ Add-Note $f 'Top row: accent colour for buttons, icons and highlights. Bottom ro
 Add-Section $f 'Toolkit updates'
 Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
 Add-Tool $f 'Auto update check' 'Checks when the toolkit opens' { Switch-AutoUpdate } -State { [bool](Get-Settings).AutoUpdate } | Out-Null
-Add-Section $f 'Share your setup (tweaks + Boost list + toolkit settings)'
+Add-Section $f 'Share your setup (tweaks + Boost list + toolkit and Hallow Mixer settings)'
 Add-Tool $f 'Export my setup' 'Save a file to send to a friend' {
     $d = New-Object System.Windows.Forms.SaveFileDialog
     $d.Filter = 'Hallow setup (*.hallow.json)|*.hallow.json'; $d.FileName = "$env:USERNAME-setup.hallow.json"
@@ -1076,6 +1076,11 @@ Add-Tool $f 'Import a setup' 'Copy a friend''s tweaks and settings' {
     $msg = "Setup from $($plan.Source.From) ($($plan.Source.Created)).`n`nBoost list: $(@($plan.Source.Settings.BoostApps) -join ', ')`n`n"
     $msg += $(if ($on) { "Turns ON:`n$on`n`n" } else { "No new tweaks to turn on.`n`n" })
     if ($off) { $msg += "They have these OFF (you have them on):`n$off`n`n" }
+    $mx = $plan.Source.Mixer
+    if ($mx) {
+        $eqs = @(); if ($mx.HeadsetEq) { $eqs += 'headset EQ' }; if ($mx.MicEq) { $eqs += 'mic EQ' }
+        $msg += "Hallow Mixer: presets ($(@($mx.Presets | ForEach-Object { $_.Name }) -join ', ')), $(@($mx.AppChannel.PSObject.Properties).Count) app choices, ducking and mic mode$(if ($eqs) { ', ' + ($eqs -join ' and ') + ' (put on your own headset and mic)' }).`n`n"
+    }
     $msg += 'Apply it?'
     if (-not (Confirm-Action $msg)) { return }
     $alsoOff = $false
