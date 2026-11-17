@@ -230,7 +230,7 @@ Add-Tool $f 'Mic Boost off' 'If you hear hiss or clipping' {
 Add-Tool $f 'Stop call ducking' 'Windows won''t lower sounds on calls' {
     Set-CallDuckingOff; Log 'Windows will no longer turn sounds down during calls.'; Update-MicNote
 } -Width 210 | Out-Null
-Add-Tool $f 'Keep my mic level' 'Tray app puts it back if lowered' {
+Add-Tool $f 'Keep mic level' 'Tray app puts it back if lowered' {
     $s = Get-Settings; $on = -not [bool]$s.KeepMicLevel
     $s | Add-Member KeepMicLevel $on -Force; Save-Settings $s
     if ($on) {

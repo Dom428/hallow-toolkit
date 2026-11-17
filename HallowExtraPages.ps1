@@ -125,7 +125,7 @@ Add-Tool $f 'Change backup folder' 'Pick where zips go' {
         $saveNote.Text = "Backups go to: $($fb.SelectedPath)  (newest 5 kept)"; Log "Game-save backups will go to $($fb.SelectedPath)"
     }
 } -Width 210 | Out-Null
-Add-Tool $f 'Weekly auto backup' 'Saturdays 4 AM' { Invoke-ToggleSaveBackupTask } -Width 210 -State { [bool](Get-ScheduledTask -TaskName $SaveTaskName -ErrorAction SilentlyContinue) } | Out-Null
+Add-Tool $f 'Weekly backup' 'Saturdays 4 AM' { Invoke-ToggleSaveBackupTask } -Width 210 -State { [bool](Get-ScheduledTask -TaskName $SaveTaskName -ErrorAction SilentlyContinue) } | Out-Null
 Add-Tool $f 'Open backups' 'Browse backup zips' { $d = Get-DefaultBackupDir; New-Item -ItemType Directory -Force $d | Out-Null; Start-Process explorer.exe $d } -Width 210 | Out-Null
 
 Add-Section $f 'Clips & screenshots'

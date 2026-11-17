@@ -87,6 +87,9 @@ $miSession.Add_Click({
     Update-SessionItem
 })
 [void]$menu.Items.Add($miSession)
+$miAudio = New-Object System.Windows.Forms.ToolStripMenuItem('Switch audio (speakers / headset)   Ctrl+Alt+Home')
+$miAudio.Add_Click({ try { Notify (Switch-AudioSetup) } catch { Notify "Audio switch failed: $($_.Exception.Message)" } })
+[void]$menu.Items.Add($miAudio)
 [void]$menu.Items.Add('-')
 $miBoost =New-Object System.Windows.Forms.ToolStripMenuItem('Auto Game Boost')
 $miBoost.CheckOnClick = $true; $miBoost.Checked = [bool]$settings.AutoBoost
@@ -115,10 +118,10 @@ $miStartup.Add_Click({ Set-TrayAtStartup $miStartup.Checked })
 [void]$menu.Items.Add($miStartup)
 [void]$menu.Items.Add('-')
 $miExit = $menu.Items.Add('Exit tray app')
-$miExit.Add_Click({ $timer.Stop(); $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
+$miExit.Add_Click({ $timer.Stop(); $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
 if (Test-IconFont) {
     $ic = [System.Drawing.Color]::FromArgb(70, 60, 90)
-    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miExit, 'power-off'))) {
+    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miAudio, 'volume-high'), @($miExit, 'power-off'))) {
         $pair[0].Image = Get-Icon $pair[1] $ic 16
     }
 }
@@ -138,6 +141,10 @@ $hotkey.add_Pressed({
     Notify "Panic key: force-closed $($p.ProcessName)."
 })
 if (-not $hotkey.Ok) { Log '[tray] Could not register Ctrl+Alt+End (another app uses it).' }
+# ---- audio switch key: Ctrl+Alt+Home flips between the two audio setups (Mic tab > Audio switcher)
+$audioKey = New-Object HallowHotKey(0x4003, 0x24)   # MOD_ALT|MOD_CONTROL|MOD_NOREPEAT, VK_HOME
+$audioKey.add_Pressed({ try { Notify (Switch-AudioSetup) } catch { Notify "Audio switch failed: $($_.Exception.Message)" } })
+if (-not $audioKey.Ok) { Log '[tray] Could not register Ctrl+Alt+Home (another app uses it).' }
 
 # ---- toolkit update notice (checks GitHub in the background, at most every 12 hours)
 $script:UpdJob = $null; $script:Ticks = 0

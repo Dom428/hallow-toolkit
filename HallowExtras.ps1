@@ -186,6 +186,10 @@ function Get-ClipFolders {
         $m = Select-String -LiteralPath $f.FullName -Pattern '"(clipFolder|clipsFolder|ClipFolder|saveLocation)"\s*:\s*"([^"]+)"' -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($m) { $c += ($m.Matches[0].Groups[2].Value -replace '\\\\', '\') }
     }
+    # OBS recordings: the folder set in each OBS profile
+    foreach ($ini in Get-ChildItem "$env:APPDATA\obs-studio\basic\profiles\*\basic.ini" -ErrorAction SilentlyContinue) {
+        foreach ($m in Select-String -LiteralPath $ini.FullName -Pattern '^(FilePath|RecFilePath)=(.+)$' -ErrorAction SilentlyContinue) { $c += ($m.Matches[0].Groups[2].Value.Trim() -replace '/', '\' -replace '\\\\', '\') }
+    }
     $steam = (Get-ItemProperty 'HKCU:\Software\Valve\Steam' -ErrorAction SilentlyContinue).SteamPath
     if ($steam) { $c += @(Get-ChildItem (Join-Path ($steam -replace '/', '\') 'userdata\*\760\remote') -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName) }
     $u = @(Get-UniquePaths ($c | Where-Object { $_ -and (Test-Path -LiteralPath $_) }))

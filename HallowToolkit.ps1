@@ -732,7 +732,7 @@ Add-Tool $f 'Uninstall' 'Through Steam / Windows' {
 } -Width 210 | Out-Null
 Add-Tool $f 'Open folder' 'Show game files' { $g = Get-SelectedGame; if ($g) { Start-Process explorer.exe $g.Path } } -Width 210 | Out-Null
 Add-Tool $f 'Refresh' 'Rescan installed games' { Update-GameList } -Width 210 | Out-Null
-Add-Note $f 'To move a Steam game between C: and G: - Steam > game > Properties > Installed Files > Move install folder.' | Out-Null
+Add-Note $f 'Moving Steam games to another drive? See "Move Steam games" further down this page.' | Out-Null
 
 # ================================================================ PAGE: NETWORK
 $f = Add-Page 'Network' ([char]0x2301) 'Speed, ping, DNS and connection fixes'
@@ -1016,6 +1016,7 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 . (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowAppsPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowGameExtrasPage.ps1')
+. (Join-Path $PSScriptRoot 'HallowMorePage.ps1')
 
 # ================================================================ PAGE: TOOLS
 $f = Add-Page 'Tools' ([char]0x2692) 'Handy Windows tools in one place'
