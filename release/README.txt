@@ -9,6 +9,17 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.9
+- Apps tab: 103 apps (was 65), each with a one-line reason to get it, in gamer-first groups:
+  game launchers, game tools, game runtimes, chat & voice, recording & streaming, browsers,
+  music & video, images & 3D, everyday tools, remote help, security & privacy, developer.
+- New: Rockstar, itch.io, Prism Launcher, CurseForge, Heroic; HWiNFO, CPU-Z, GPU-Z,
+  CrystalDiskInfo/Mark, DDU, NVCleanstall, RivaTuner, Moonlight, Parsec; XNA, PhysX, Java 8,
+  .NET 9; Mumble; Streamlabs, Medal, Voicemeeter, EarTrumpet; MPC-HC, Plex, Jellyfin, Kodi;
+  Flow Launcher, Revo, Obsidian, Ventoy, Google Drive, Dropbox; Proton VPN, Mullvad, WARP, WireGuard.
+- Tick starter pack: Steam, Discord, 7-Zip, VLC and the game runtimes that stop most
+  "missing .dll" errors - one click for a fresh PC.
+
 WHAT'S NEW IN 3.8
 - New Apps tab - like Ninite, built in: tick the apps you want (browsers, game launchers, Discord,
   OBS, 7-Zip, game runtimes and more) and install them all silently in one go, from each maker's

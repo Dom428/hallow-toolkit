@@ -13,7 +13,7 @@ $appFilter = New-Object System.Windows.Forms.ComboBox
 $appFilter.DropDownStyle = 'DropDownList'; $appFilter.Width = 300; $appFilter.Font = New-Font 10.5
 $appFilter.BackColor = $C.Panel; $appFilter.ForeColor = $C.Text; $appFilter.FlatStyle = 'Flat'
 $appFilter.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
-foreach ($x in @('All apps') + @($AppCatalog.Keys) + @('Not installed yet', 'Updates available', 'My apps')) { [void]$appFilter.Items.Add($x) }
+foreach ($x in @('All apps') + @($AppCatalog.Keys) + @('Starter pack', 'Not installed yet', 'Updates available', 'My apps')) { [void]$appFilter.Items.Add($x) }
 $appFilter.SelectedIndex = 0
 $f.Controls.Add($appFilter)
 $appCount = New-Object System.Windows.Forms.Label
@@ -21,7 +21,7 @@ $appCount.AutoSize = $false; $appCount.Width = 540; $appCount.Height = 30; $appC
 $appCount.ForeColor = $C.Muted; $appCount.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
 $f.Controls.Add($appCount); $f.SetFlowBreak($appCount, $true)
 
-$appList = New-DarkList $f @(@('App', 230), @('Group', 120), @('Status', 130), @('What it is', 360)) 860 330 $true
+$appList = New-DarkList $f @(@('App', 215), @('Group', 150), @('Status', 120), @('Why get it', 355)) 860 330 $true
 $appList.ShowItemToolTips = $true; $f.SetFlowBreak($appList, $true)
 
 function Get-AppStatus($r) {
@@ -45,6 +45,7 @@ function Show-AppList {
         $status = Get-AppStatus $r
         $show = switch ($sel) {
             'All apps' { $true }
+            'Starter pack' { $r.Rec }
             'Not installed yet' { -not $status }
             'Updates available' { $status -eq 'Update available' }
             'My apps' { $mine -contains $r.Id }
@@ -122,6 +123,12 @@ Add-Tool $f 'Refresh' 'Re-check what is installed' { Update-AppState } -Width 21
 Add-Tool $f 'Untick all' 'Clear your picks' { $script:AppTicked.Clear(); Show-AppList } -Width 210 -Icon 'list-check' | Out-Null
 
 Add-Section $f 'My apps (set up a new PC in one click)' 'star'
+Add-Tool $f 'Tick starter pack' 'Steam, Discord, 7-Zip, VLC + game runtimes' {
+    $rec = @($script:AppRows | Where-Object Rec)
+    foreach ($r in $rec) { if ((Get-AppStatus $r) -ne 'Installed') { [void]$script:AppTicked.Add($r.Id) } }
+    $appFilter.SelectedItem = 'Starter pack'; Show-AppList
+    Log "Ticked the starter pack apps you don't have yet. The runtimes stop most 'missing .dll' errors in games."
+} -Width 210 -Icon 'rocket' | Out-Null
 Add-Tool $f 'Save ticked as my apps' 'Remember this set' {
     if (-not $script:AppTicked.Count) { Log 'Tick the apps you always want first.'; return }
     Save-MyApps @($script:AppTicked); Log "Saved $($script:AppTicked.Count) app(s) as your apps. Tools > Export my setup takes them to a friend or a new PC."

@@ -9,7 +9,7 @@
 function Get-AppCatalogRows {
     foreach ($cat in $AppCatalog.Keys) {
         foreach ($a in $AppCatalog[$cat]) {
-            [pscustomobject]@{ Category = $cat; Name = $a[0]; Id = $a[1]; Ninite = $a[2]; Note = $a[3]; User = ($a.Count -gt 4 -and $a[4] -eq 'user') }
+            [pscustomobject]@{ Category = $cat; Name = $a[0]; Id = $a[1]; Ninite = $a[2]; Note = $a[3]; User = ("$($a[4])" -match 'user'); Rec = ("$($a[4])" -match 'rec') }
         }
     }
 }
