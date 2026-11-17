@@ -9,6 +9,10 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.9.1
+- Cleaner buttons: the icon sits in its own column with a gap, the title is bold and the
+  description is smaller and dimmer underneath.
+
 WHAT'S NEW IN 3.9
 - Apps tab: 103 apps (was 65), each with a one-line reason to get it, in gamer-first groups:
   game launchers, game tools, game runtimes, chat & voice, recording & streaming, browsers,

@@ -213,6 +213,39 @@ function Add-Note($Flow, [string]$Text) {
 }
 
 $tips = New-Object System.Windows.Forms.ToolTip
+# Tool buttons are drawn by hand: icon in its own column, title on top, a smaller dimmer description under it.
+# The button's Text stays "Title`nDescription" (tooltips, screen readers and code that renames a button keep working).
+$script:PrimaryButtons = New-Object 'System.Collections.Generic.HashSet[object]'
+$script:BtnTitleFont = New-Object System.Drawing.Font('Segoe UI Semibold', [float]9.75, [System.Drawing.FontStyle]::Regular)
+$script:BtnDescFont = New-Object System.Drawing.Font('Segoe UI', [float]8.75, [System.Drawing.FontStyle]::Regular)
+$script:ToolPaint = {
+    param($s, $e)
+    $g = $e.Graphics; $w = $s.Width; $h = $s.Height
+    $prim = $script:PrimaryButtons.Contains($s)
+    $hot = $s.Enabled -and $s.ClientRectangle.Contains($s.PointToClient([System.Windows.Forms.Cursor]::Position))
+    $bg = if ($prim) { if ($hot) { $C.AccentHover } else { $C.Accent } } else { if ($hot) { $C.PanelHi } else { $C.Panel } }
+    $g.Clear($bg)
+    $x = 14
+    if ($s.Image) {
+        $img = $s.Image
+        if ($s.Enabled) { $g.DrawImage($img, $x, [int](($h - $img.Height) / 2), $img.Width, $img.Height) }
+        else { [System.Windows.Forms.ControlPaint]::DrawImageDisabled($g, $img, $x, [int](($h - $img.Height) / 2), $bg) }
+        $x += 20 + 12
+    }
+    $parts = "$($s.Text)" -split "`n", 2
+    $title = $parts[0]; $desc = $(if ($parts.Count -gt 1) { $parts[1] } else { '' })
+    $tc = if (-not $s.Enabled) { $C.Muted } elseif ($prim) { $C.AccentText } else { $C.Text }
+    # description colour: muted on panels; on the accent button, text colour blended 25% toward the background
+    $dc = if ($prim) { [System.Drawing.Color]::FromArgb([int]($C.AccentText.R * 0.75 + $bg.R * 0.25), [int]($C.AccentText.G * 0.75 + $bg.G * 0.25), [int]($C.AccentText.B * 0.75 + $bg.B * 0.25)) } else { $C.Muted }
+    $tw = $w - $x - 10
+    $flagsT = [System.Windows.Forms.TextFormatFlags]'Left, Top, SingleLine, EndEllipsis, NoPrefix'
+    $flagsD = [System.Windows.Forms.TextFormatFlags]'Left, Top, WordBreak, EndEllipsis, NoPrefix'
+    $th = [System.Windows.Forms.TextRenderer]::MeasureText($g, $title, $script:BtnTitleFont, (New-Object System.Drawing.Size($tw, 100)), $flagsT).Height
+    $dh = if ($desc) { [math]::Min(32, [System.Windows.Forms.TextRenderer]::MeasureText($g, $desc, $script:BtnDescFont, (New-Object System.Drawing.Size($tw, 100)), $flagsD).Height) } else { 0 }
+    $y = [int](($h - $th - $dh - $(if ($desc) { 1 } else { 0 })) / 2)
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $title, $script:BtnTitleFont, (New-Object System.Drawing.Rectangle($x, $y, $tw, $th)), $tc, $flagsT)
+    if ($desc) { [System.Windows.Forms.TextRenderer]::DrawText($g, $desc, $script:BtnDescFont, (New-Object System.Drawing.Rectangle($x, ($y + $th + 1), $tw, $dh)), $dc, $bg, $flagsD) }
+}
 function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [switch]$Primary, [int]$Width = 278, [string]$Icon) {
     $b = New-Object System.Windows.Forms.Button
     $b.UseMnemonic = $false; $b.Text = "$Title`n$Desc"
@@ -221,6 +254,8 @@ function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [s
         $b.Image = Get-Icon $Icon $(if ($Primary) { $C.AccentText } else { $C.Accent }) 20
         $b.ImageAlign = 'MiddleLeft'; $b.TextImageRelation = 'ImageBeforeText'
     }
+    if ($Primary) { [void]$script:PrimaryButtons.Add($b) }
+    $b.Add_Paint($script:ToolPaint)
     $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderSize = 0
     $b.BackColor = $(if ($Primary) { $C.Accent } else { $C.Panel })
     $b.ForeColor = $(if ($Primary) { $C.AccentText } else { $C.Text })

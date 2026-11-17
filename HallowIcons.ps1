@@ -117,13 +117,13 @@ function Get-IconFamily {
 function Test-IconFont { [bool](Get-IconFamily) }
 
 # Returns a square bitmap of the icon in the given colour, or $null when the font is missing.
-function Get-Icon([string]$Name, [System.Drawing.Color]$Color, [int]$Size = 16) {
+function Get-Icon([string]$Name, [System.Drawing.Color]$Color, [int]$Size = 16, [int]$PadRight = 0) {
     if (-not $Fa.ContainsKey($Name)) { return $null }
     $fam = Get-IconFamily
     if (-not $fam) { return $null }
-    $key = "$Name|$($Color.ToArgb())|$Size"
+    $key = "$Name|$($Color.ToArgb())|$Size|$PadRight"
     if ($script:IconCache.ContainsKey($key)) { return $script:IconCache[$key] }
-    $bmp = New-Object System.Drawing.Bitmap($Size, $Size)
+    $bmp = New-Object System.Drawing.Bitmap(($Size + $PadRight), $Size)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAlias
     $font = New-Object System.Drawing.Font($fam, [float]($Size * 0.8), [System.Drawing.FontStyle]::Regular, [System.Drawing.GraphicsUnit]::Pixel)
