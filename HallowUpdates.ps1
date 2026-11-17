@@ -246,7 +246,9 @@ function Test-NewerVersion([string]$Latest, [string]$Current) {
 function Install-SelfUpdateFiles([string]$Folder, [string]$Temp) {
     $n = 0
     Get-ChildItem $Folder -File | Where-Object { $_.Extension -in '.ps1', '.ico', '.bat', '.txt', '.ttf' -and $_.Name -ne 'Install.ps1' } | ForEach-Object {
-        Copy-Item $_.FullName $HallowRoot -Force; Unblock-File (Join-Path $HallowRoot $_.Name) -ErrorAction SilentlyContinue; $n++
+        $to = Join-Path $HallowRoot $_.Name
+        if ((Test-Path $to) -and (Get-FileHash $to).Hash -eq (Get-FileHash $_.FullName).Hash) { return }   # unchanged (and maybe in use)
+        try { Copy-Item $_.FullName $HallowRoot -Force -ErrorAction Stop; Unblock-File $to -ErrorAction SilentlyContinue; $n++ } catch { Log "Could not update $($_.Exception.Message)" }
     }
     if ($Temp -like "$env:TEMP*hallow-update-*") { Remove-Item $Temp -Recurse -Force -ErrorAction SilentlyContinue }
     $n

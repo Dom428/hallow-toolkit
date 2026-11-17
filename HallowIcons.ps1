@@ -101,8 +101,13 @@ function Get-IconFamily {
         $script:IconFonts = $false
         if (Test-Path $IconFontFile) {
             try {
+                # Load a private copy: GDI+ keeps the font file locked while the app runs, which would block updates
+                # from replacing the toolkit's own copy.
+                $len = (Get-Item $IconFontFile).Length
+                $copy = Join-Path $env:TEMP "hallow-fa-solid-$len.ttf"
+                if (-not (Test-Path $copy) -or (Get-Item $copy).Length -ne $len) { Copy-Item $IconFontFile $copy -Force -ErrorAction Stop }
                 $pfc = New-Object System.Drawing.Text.PrivateFontCollection
-                $pfc.AddFontFile($IconFontFile)
+                $pfc.AddFontFile($copy)
                 if ($pfc.Families.Count) { $script:IconFonts = $pfc }
             } catch { }
         }

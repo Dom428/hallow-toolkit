@@ -145,7 +145,7 @@ function Show-Page([string]$Name) {
 $PageIcons = @{
     'Tune-up' = 'wand-magic-sparkles'; 'Monitor' = 'gauge-high'; 'Health' = 'heart-pulse'; 'Gaming' = 'rocket'; 'Games' = 'gamepad'
     'Network' = 'wifi'; 'Server' = 'server'; 'Storage' = 'hard-drive'; 'Uninstall' = 'trash-can'; 'Tools' = 'screwdriver-wrench'
-    'Tweaks' = 'sliders'; 'Dev' = 'code'; 'Drivers' = 'microchip'; 'Mic' = 'microphone'
+    'Tweaks' = 'sliders'; 'Dev' = 'code'; 'Drivers' = 'microchip'; 'Mic' = 'microphone'; 'Apps' = 'download'
 }
 $script:NavIcons = @{}
 function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
@@ -178,11 +178,11 @@ function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
         $nb.ImageAlign = 'MiddleLeft'; $nb.TextImageRelation = 'ImageBeforeText'
         $nb.Padding = New-Object System.Windows.Forms.Padding(20, 0, 0, 0)
     }
-    $nb.Size = New-Object System.Drawing.Size(220, 40); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
+    $nb.Size = New-Object System.Drawing.Size(220, 36); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
     $nb.Cursor = [System.Windows.Forms.Cursors]::Hand
     $nb.Add_Click({ Show-Page $this.Tag })
     $nav.Controls.Add($nb); $navButtons.Add($nb)
-    $script:navY += 42
+    $script:navY += 38
     return $flow
 }
 
@@ -949,6 +949,7 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 . (Join-Path $PSScriptRoot 'HallowExtraPages.ps1')
 . (Join-Path $PSScriptRoot 'HallowDriverPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
+. (Join-Path $PSScriptRoot 'HallowAppsPage.ps1')
 
 # ================================================================ PAGE: TOOLS
 $f = Add-Page 'Tools' ([char]0x2692) 'Handy Windows tools in one place'

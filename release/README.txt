@@ -9,6 +9,15 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 3.8
+- New Apps tab - like Ninite, built in: tick the apps you want (browsers, game launchers, Discord,
+  OBS, 7-Zip, game runtimes and more) and install them all silently in one go, from each maker's
+  official installer. See what's already installed or has an update.
+- Search every app in winget and install from the results.
+- My apps: save your usual set and tick it all again on a new PC in one click. It goes along with
+  Share your setup.
+- Open on Ninite: opens ninite.com with the same apps ticked, if you prefer Ninite.
+
 WHAT'S NEW IN 3.7
 - New look: Font Awesome icons on every tab, button and section (and in the tray menu).
 - Themes: Tools tab > Theme. Pick an accent colour (orange, purple, blue, green, red, pink) and a

@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '3.7'
+$AppVersion = '3.8'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -113,6 +113,7 @@ function Get-Settings {
         ServerAlerts    = $true
         Theme           = 'Orange'
         ThemeBase       = 'Hallow'
+        MyApps          = @()
     }
     if (Test-Path $SettingsFile) {
         try {
@@ -1217,6 +1218,7 @@ function Remove-LeftoverItems($Items) {
 . (Join-Path $HallowRoot 'HallowPerf.ps1')
 . (Join-Path $HallowRoot 'HallowFixes.ps1')
 . (Join-Path $HallowRoot 'HallowMic.ps1')
+. (Join-Path $HallowRoot 'HallowApps.ps1')
 . (Join-Path $HallowRoot 'HallowDiag.ps1')
 . (Join-Path $HallowRoot 'HallowServer.ps1')
 . (Join-Path $HallowRoot 'HallowIcons.ps1')
