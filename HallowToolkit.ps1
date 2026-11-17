@@ -218,9 +218,25 @@ $tips = New-Object System.Windows.Forms.ToolTip
 $script:PrimaryButtons = New-Object 'System.Collections.Generic.HashSet[object]'
 $script:BtnTitleFont = New-Object System.Drawing.Font('Segoe UI Semibold', [float]9.75, [System.Drawing.FontStyle]::Regular)
 $script:BtnDescFont = New-Object System.Drawing.Font('Segoe UI', [float]8.75, [System.Drawing.FontStyle]::Regular)
-$script:BtnPillFont = New-Object System.Drawing.Font('Segoe UI', [float]7.5, [System.Drawing.FontStyle]::Bold)
 $script:ToggleStates = @{}   # button -> scriptblock returning $true when the setting is on
-$script:ToggleCache = @{}    # button -> last known state (painted as the ON/OFF pill)
+$script:ToggleCache = @{}    # button -> last known state (painted as a toggle switch)
+# A phone-style toggle switch, 40x22: green track with the knob on the right = on, grey with the knob on the left = off.
+# -Pending draws a yellow ring (changed but not applied yet).
+function Draw-Switch($g, [int]$X, [int]$Y, [bool]$On, [switch]$Pending, [bool]$Enabled = $true) {
+    $W = 40; $H = 22
+    $old = $g.SmoothingMode; $g.SmoothingMode = 'AntiAlias'
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc($X, $Y, $H, $H, 90, 180); $path.AddArc(($X + $W - $H), $Y, $H, $H, 270, 180); $path.CloseFigure()
+    $track = if ($On) { $C.Good } else { [System.Drawing.Color]::FromArgb(88, 86, 100) }
+    if (-not $Enabled) { $track = [System.Drawing.Color]::FromArgb(140, $track) }
+    $br = New-Object System.Drawing.SolidBrush($track); $g.FillPath($br, $path); $br.Dispose()
+    if ($Pending) { $pen = New-Object System.Drawing.Pen($C.Warn, 2); $g.DrawPath($pen, $path); $pen.Dispose() }
+    $path.Dispose()
+    $k = $H - 6; $kx = $(if ($On) { $X + $W - $k - 3 } else { $X + 3 })
+    $kb = New-Object System.Drawing.SolidBrush($(if ($On) { [System.Drawing.Color]::White } else { [System.Drawing.Color]::FromArgb(205, 202, 214) }))
+    $g.FillEllipse($kb, $kx, ($Y + 3), $k, $k); $kb.Dispose()
+    $g.SmoothingMode = $old
+}
 function Update-ToggleStates {
     foreach ($b in @($script:ToggleStates.Keys)) {
         try { $script:ToggleCache[$b] = [bool](& $script:ToggleStates[$b]) } catch { [void]$script:ToggleCache.Remove($b) }
@@ -247,15 +263,10 @@ $script:ToolPaint = {
     $dc = if ($prim) { [System.Drawing.Color]::FromArgb([int]($C.AccentText.R * 0.75 + $bg.R * 0.25), [int]($C.AccentText.G * 0.75 + $bg.G * 0.25), [int]($C.AccentText.B * 0.75 + $bg.B * 0.25)) } else { $C.Muted }
     $tc = if ($prim) { if ($s.Enabled) { $C.AccentText } else { $dc } } elseif ($s.Enabled) { $C.Text } else { $C.Muted }
     $tw = $w - $x - 10
-    # on/off switches: a pill in the top-right corner shows the current state
+    # on/off settings: a toggle switch on the right shows the current state
     if ($script:ToggleCache.ContainsKey($s)) {
-        $on = $script:ToggleCache[$s]
-        $pt = $(if ($on) { 'ON' } else { 'OFF' })
-        $pw = 38; $ph = 18; $pr = New-Object System.Drawing.Rectangle(($w - $pw - 8), 7, $pw, $ph)
-        $pb = New-Object System.Drawing.SolidBrush($(if ($on) { $C.Good } elseif ($prim) { $C.AccentHover } else { $C.Bg }))
-        $g.FillRectangle($pb, $pr); $pb.Dispose()
-        [System.Windows.Forms.TextRenderer]::DrawText($g, $pt, $script:BtnPillFont, $pr, $(if ($on) { $C.Bg } else { $C.Muted }), [System.Windows.Forms.TextFormatFlags]'HorizontalCenter, VerticalCenter, SingleLine, NoPrefix')
-        $tw -= ($pw + 6)
+        Draw-Switch $g ($w - 52) ([int](($h - 22) / 2)) $script:ToggleCache[$s] -Enabled:$s.Enabled
+        $tw -= 50
     }
     $flagsT = [System.Windows.Forms.TextFormatFlags]'Left, Top, SingleLine, EndEllipsis, NoPrefix'
     $flagsD = [System.Windows.Forms.TextFormatFlags]'Left, Top, WordBreak, EndEllipsis, NoPrefix'
@@ -285,7 +296,7 @@ function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [s
     $b.Font = New-Font 9.5 $(if ($Primary) { 'Bold' } else { 'Regular' })
     $b.Cursor = [System.Windows.Forms.Cursors]::Hand
     $b.Tag = $Action
-    if ($State) { $script:ToggleStates[$b] = $State; $Desc = "$Desc. The pill shows whether it's on right now - click to switch." }
+    if ($State) { $script:ToggleStates[$b] = $State; $Desc = "$Desc. Green switch = on right now, grey = off. Click to switch." }
     $tips.SetToolTip($b, $Desc)
     $b.Add_Click({
         $act = $this.Tag

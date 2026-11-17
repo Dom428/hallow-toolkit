@@ -315,34 +315,37 @@ Add-Tool $f 'Disk map' 'See what fills the drive, visually' {
 # ================================================================ PAGE: TWEAKS
 $f = Add-Page 'Tweaks' ([char]0x2699) 'Privacy, quality-of-life, debloat, startup apps and background services'
 $script:TweakBoxes = @()
-$script:TweakLabels = @{}   # checkbox -> status label
 $script:TweakNow = @{}      # checkbox -> what the PC is actually set to
+$script:TweakFont = New-Font 9.5
+# Each tweak is a checkbox drawn as a toggle switch: green = on, grey = off.
+# A yellow ring + "not applied" means the switch was flipped but Apply hasn't been clicked yet.
+$script:TweakPaint = {
+    param($s, $e)
+    $g = $e.Graphics; $g.Clear($s.Parent.BackColor)
+    $pending = $script:TweakNow.ContainsKey($s) -and ($s.Checked -ne $script:TweakNow[$s])
+    Draw-Switch $g 2 ([int](($s.Height - 22) / 2)) $s.Checked -Pending:$pending -Enabled:$s.Enabled
+    $tx = 52; $tw = $s.Width - $tx - $(if ($pending) { 78 } else { 4 })
+    $flags = [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, EndEllipsis, NoPrefix'
+    $tc = $(if ($s.Tag.Admin -and -not $IsAdmin) { $C.Muted } else { $C.Text })
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $s.Text, $script:TweakFont, (New-Object System.Drawing.Rectangle($tx, 0, $tw, $s.Height)), $tc, $flags)
+    if ($pending) { [System.Windows.Forms.TextRenderer]::DrawText($g, 'not applied', $script:TweakFont, (New-Object System.Drawing.Rectangle(($s.Width - 76), 0, 76, $s.Height)), $C.Warn, $flags) }
+    if ($s.Focused -and $s.ShowFocusCues) { [System.Windows.Forms.ControlPaint]::DrawFocusRectangle($g, (New-Object System.Drawing.Rectangle(0, 0, $s.Width, $s.Height))) }
+}
 $lastGroup = ''
 foreach ($t in $Tweaks) {
     if ($t.Group -ne $lastGroup) { Add-Section $f $t.Group; $lastGroup = $t.Group }
     $cb = New-Object System.Windows.Forms.CheckBox
-    $cb.Text = $t.Name; $cb.Tag = $t; $cb.Width = 344; $cb.Height = 28; $cb.ForeColor = $C.Text; $cb.UseMnemonic = $false
-    $cb.Margin = New-Object System.Windows.Forms.Padding(2, 0, 0, 0)
-    if ($t.Admin -and -not $IsAdmin) { $cb.ForeColor = $C.Muted }
-    # status label: what the PC is set to right now, or what Apply will change
-    $st = New-Object System.Windows.Forms.Label
-    $st.AutoSize = $false; $st.Width = 84; $st.Height = 28; $st.TextAlign = 'MiddleLeft'; $st.UseMnemonic = $false
-    $st.Font = New-Font 8.25 'Bold'; $st.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 0)
-    $cb.Add_CheckedChanged({ Update-TweakStatus $this })
-    $f.Controls.Add($cb); $f.Controls.Add($st); $script:TweakBoxes += $cb; $script:TweakLabels[$cb] = $st
-}
-function Update-TweakStatus($cb) {
-    $st = $script:TweakLabels[$cb]; if (-not $st -or -not $script:TweakNow.ContainsKey($cb)) { return }
-    $now = $script:TweakNow[$cb]
-    if ($cb.Checked -ne $now) { $st.Text = $(if ($cb.Checked) { 'will be ON' } else { 'will be OFF' }); $st.ForeColor = $C.Warn }
-    elseif ($now) { $st.Text = "$([char]0x25CF) ON now"; $st.ForeColor = $C.Good }
-    else { $st.Text = 'off'; $st.ForeColor = $C.Muted }
+    $cb.Text = $t.Name; $cb.Tag = $t; $cb.Width = 430; $cb.Height = 32; $cb.ForeColor = $C.Text; $cb.UseMnemonic = $false
+    $cb.Margin = New-Object System.Windows.Forms.Padding(2, 0, 10, 0); $cb.Cursor = [System.Windows.Forms.Cursors]::Hand
+    $cb.Add_Paint($script:TweakPaint)
+    $tips.SetToolTip($cb, "$($t.Name)`nGreen = on, grey = off. Flip it, then click Apply changes.")
+    $f.Controls.Add($cb); $script:TweakBoxes += $cb
 }
 function Update-TweakBoxes {
-    foreach ($cb in $script:TweakBoxes) { $on = [bool](Test-Tweak $cb.Tag); $script:TweakNow[$cb] = $on; $cb.Checked = $on; Update-TweakStatus $cb }
+    foreach ($cb in $script:TweakBoxes) { $on = [bool](Test-Tweak $cb.Tag); $script:TweakNow[$cb] = $on; $cb.Checked = $on; $cb.Invalidate() }
 }
-Add-Note $f 'Green "ON now" = already set on this PC. Yellow = a change you haven''t applied yet - click Apply. Undo = Windows defaults.' | Out-Null
-Add-Tool $f 'Apply changes' 'Apply the ticks above' {
+Add-Note $f 'Green = on right now, grey = off. Flip switches, then click Apply changes (yellow = not applied yet). Undo = Windows defaults.' | Out-Null
+Add-Tool $f 'Apply changes' 'Apply the switches above' {
     $changed = 0; $explorer = $false
     foreach ($cb in $script:TweakBoxes) {
         $on = Test-Tweak $cb.Tag
