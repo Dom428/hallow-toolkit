@@ -37,6 +37,38 @@ function Send-DiscordPostAsync([string]$Title, [string]$Text, [int]$Color = 0xF0
     } catch { Log '[tray] Discord post failed to start.' }
 }
 
+# ---- v4.8: what you're listening to and mic status, from Hallow Mixer (both off unless you turn them on)
+# Called by the tray every 5 s with Hallow Mixer's /state. Songs: only from apps in the Music channel, only after
+# 30 s of playing (skipped songs aren't posted), at most one post every 2 minutes. Mic: posts when a mute or unmute
+# has lasted 10 s, at most once a minute.
+$script:MixPost = @{ Song = $null; SongSince = $null; SongPosted = $false; LastSong = [datetime]::MinValue
+                     Mic = $null; MicCand = $null; MicSince = $null; LastMic = [datetime]::MinValue }
+function Update-MixerPosts($St, [datetime]$Now = (Get-Date)) {
+    $p = $script:MixPost
+    if (-not $St) { return }
+    if (Get-LinkSetting 'DiscordNowPlaying' $false) {
+        $n = $St.nowPlaying
+        if ($n -and $n.playing -and $n.title -and ("$($n.channel)" -eq 'music')) {
+            $key = "$($n.title)|$($n.artist)"
+            if ($key -ne $p.Song) { $p.Song = $key; $p.SongSince = $Now; $p.SongPosted = $false }
+            elseif (-not $p.SongPosted -and ($Now - $p.SongSince).TotalSeconds -ge 30 -and ($Now - $p.LastSong).TotalSeconds -ge 120) {
+                $p.SongPosted = $true; $p.LastSong = $Now
+                $text = "**$($n.title)**" + $(if ($n.artist) { " - $($n.artist)" } else { '' }) + " ($($n.app))"
+                Send-DiscordPostAsync 'Listening to' $text 0x6ED28C
+            }
+        }
+    }
+    if (Get-LinkSetting 'DiscordMicStatus' $false) {
+        $muted = [bool]$St.mic.muted
+        if ($null -eq $p.Mic) { $p.Mic = $muted; $p.MicCand = $muted }   # first look: remember, don't post
+        elseif ($muted -ne $p.MicCand) { $p.MicCand = $muted; $p.MicSince = $Now }
+        elseif ($muted -ne $p.Mic -and $p.MicSince -and ($Now - $p.MicSince).TotalSeconds -ge 10 -and ($Now - $p.LastMic).TotalSeconds -ge 60) {
+            $p.Mic = $muted; $p.LastMic = $Now
+            if ($muted) { Send-DiscordPostAsync 'Mic muted' 'Probably away for a bit.' 0x8F88A0 } else { Send-DiscordPostAsync 'Mic back on' 'Back now.' 0xF07820 }
+        }
+    }
+}
+
 # ================================================================ PHONE DASHBOARD
 # A tiny read-only web page served by the tray app on this PC's Tailscale address only, behind a secret key in the link.
 $DashPort = 5190

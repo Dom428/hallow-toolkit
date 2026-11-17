@@ -296,6 +296,9 @@ $timer.Add_Tick({
         $script:DashState.InGame = $script:InGame
         if ($script:Ticks % 12 -eq 1) { Update-Dashboard }   # every minute: start/stop the phone dashboard to match the setting
         Test-PowerTimer
+        if ((Get-DiscordWebhook) -and ((Get-LinkSetting 'DiscordNowPlaying' $false) -or (Get-LinkSetting 'DiscordMicStatus' $false))) {
+            try { Update-MixerPosts (Invoke-Mixer '/state') } catch { Log "[tray] mixer posts: $($_.Exception.Message)" }
+        }
         if ($g -and -not $script:InGame) {
             $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
             $script:DashState.InGame = $g.Name; $script:DashState.GameStart = Get-Date

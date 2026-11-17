@@ -284,6 +284,8 @@ Add-Tool $f 'Send test post' 'Check the channel gets it' {
 } -Width 210 | Out-Null
 Add-Tool $f 'Sessions' 'Post when you stop playing' { Set-LinkSetting 'DiscordSessions' (-not (Get-LinkSetting 'DiscordSessions' $true)) } -Width 210 -State { Get-LinkSetting 'DiscordSessions' $true } | Out-Null
 Add-Tool $f 'Alerts' 'Post when a server goes down' { Set-LinkSetting 'DiscordServer' (-not (Get-LinkSetting 'DiscordServer' $true)) } -Width 210 -State { Get-LinkSetting 'DiscordServer' $true } | Out-Null
+Add-Tool $f 'Listening to' 'Post songs from Music apps' { Set-LinkSetting 'DiscordNowPlaying' (-not (Get-LinkSetting 'DiscordNowPlaying' $false)); if (Get-LinkSetting 'DiscordNowPlaying' $false) { Log 'Listening to: ON. Needs Hallow Mixer running. Songs from apps in its Music channel (Spotify etc.) are posted after 30 s of playing, at most one every 2 minutes. Browser videos are never posted.' } } -Width 210 -State { Get-LinkSetting 'DiscordNowPlaying' $false } | Out-Null
+Add-Tool $f 'Mic status' 'Post when you mute / unmute' { Set-LinkSetting 'DiscordMicStatus' (-not (Get-LinkSetting 'DiscordMicStatus' $false)); if (Get-LinkSetting 'DiscordMicStatus' $false) { Log 'Mic status: ON. Needs Hallow Mixer running. Posts "Mic muted" / "Mic back on" once a change has lasted 10 seconds, at most once a minute.' } } -Width 210 -State { Get-LinkSetting 'DiscordMicStatus' $false } | Out-Null
 Add-Tool $f 'Disconnect' 'Forget the webhook link' {
     $s = Get-Settings; if ($s.PSObject.Properties.Name -contains 'DiscordWebhook') { $s.PSObject.Properties.Remove('DiscordWebhook'); Save-Settings $s }
     Update-DiscordNote; Log 'Discord disconnected - the link is removed from this PC.'
