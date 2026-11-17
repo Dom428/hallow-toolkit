@@ -180,3 +180,82 @@ $f = $script:PageFlows['Network']
 Add-Section $f 'Lag spikes when someone streams or downloads?' 'wave-square'
 Add-Tool $f 'Lag under load test' 'Ping while the line is busy (~30 s)' { Start-Background 'Lag under load test' $BufferbloatWork @() } -Primary | Out-Null
 Add-Note $f 'Measures how much your ping rises while downloading and uploading (bufferbloat). Grade A or better = no lag spikes from other traffic.' | Out-Null
+
+# ================================================================ HEALTH: security check (v4.3)
+# Slow checks run in a background runspace that loads the toolkit's own functions.
+$CoreWork = { param([string]$Root, [string]$Fn) $script:LogBox = $null; . (Join-Path $Root 'HallowCore.ps1'); & $Fn }
+$f = $script:PageFlows['Health']
+Add-Section $f 'Security check' 'shield-halved'
+Add-Note $f 'Read-only: antivirus, firewall, UAC, old file sharing, Remote Desktop, odd startup programs, what''s open to your network, risky browser extensions.' | Out-Null
+$script:SecRows = @()
+function Show-SecurityRows($Rows) {
+    $secList.Items.Clear(); $script:SecRows = @($Rows | Where-Object { $_.PSObject.Properties.Name -contains 'State' })
+    foreach ($r in $script:SecRows | Sort-Object { @{ Problem = 0; Note = 1; OK = 2 }[$_.State] }, Area, Check) {
+        $li = New-Object System.Windows.Forms.ListViewItem($r.Area)
+        [void]$li.SubItems.Add($r.Check); [void]$li.SubItems.Add($r.State); [void]$li.SubItems.Add($r.Detail)
+        $li.ForeColor = $(if ($r.State -eq 'Problem') { $C.Bad } elseif ($r.State -eq 'Note') { $C.Warn } else { $C.Good })
+        $li.ToolTipText = $r.Detail; $li.Tag = $r
+        [void]$secList.Items.Add($li)
+    }
+    $bad = @($script:SecRows | Where-Object State -eq 'Problem'); $notes = @($script:SecRows | Where-Object State -eq 'Note')
+    Log ("Security check: {0}, {1} thing(s) worth a look. Double-click a row to open its setting." -f $(if ($bad) { "$($bad.Count) problem(s)" } else { 'no problems' }), $notes.Count)
+}
+Add-Tool $f 'Check security' 'Read-only, about 5 seconds' { Start-Background 'Security check' $CoreWork @($HallowRoot, 'Get-SecurityCheck') { param($o) Show-SecurityRows $o } } -Primary -Width 210 | Out-Null
+Add-Tool $f 'Quick virus scan' 'Microsoft Defender, in the background' {
+    Start-Background 'Defender quick scan' { try { Start-MpScan -ScanType QuickScan -ErrorAction Stop; 'Quick scan finished - Windows Security shows anything it found.' } catch { "Quick scan could not start: $($_.Exception.Message)" } } @()
+} -Width 210 | Out-Null
+Add-Tool $f 'Update virus definitions' 'Get the newest Defender definitions' {
+    Start-Background 'Defender definitions update' { try { Update-MpSignature -ErrorAction Stop; 'Virus definitions are up to date.' } catch { "Could not update: $($_.Exception.Message)" } } @()
+} -Width 210 | Out-Null
+$secList = New-DarkList $f @(@('Area', 110), @('Check', 300), @('Status', 70), @('Details', 400)) 880 190 $false
+$secList.ShowItemToolTips = $true; $f.SetFlowBreak($secList, $true)
+$secList.Add_DoubleClick({
+    $r = $secList.SelectedItems[0].Tag; if (-not $r) { return }
+    switch ($r.Fix) {
+        '' { Log "$($r.Check): $($r.Detail)" }
+        'sigs' { Start-Background 'Defender definitions update' { try { Update-MpSignature -ErrorAction Stop; 'Virus definitions are up to date.' } catch { "Could not update: $($_.Exception.Message)" } } @() }
+        'scan' { Start-Process 'windowsdefender://threat/'; Log 'Opened Windows Security - click Quick scan, or use the Quick virus scan button.' }
+        'startup' { Start-Process 'ms-settings:startupapps'; Log "Opened Startup apps - turn off $($r.Check) there if you don't need it." }
+        default { Start-Process $r.Fix; Log "Opened the setting for: $($r.Check)" }
+    }
+})
+
+# ================================================================ TOOLS: before / after snapshot (v4.3)
+$f = $script:PageFlows['Tools']
+Add-Section $f 'Before / after snapshot' 'camera'
+Add-Note $f 'Snapshot before installing something sketchy, then Compare to see the apps, startup items, services and extensions it added.' | Out-Null
+function Update-SnapshotCombo {
+    $snapPick.Items.Clear()
+    foreach ($s in Get-SnapshotFiles) { [void]$snapPick.Items.Add(($s.BaseName -replace '^snapshot-', '' -replace '_(\d\d)(\d\d)(\d\d)$', ' $1:$2:$3')) }
+    if ($snapPick.Items.Count) { $snapPick.SelectedIndex = 0 } else { [void]$snapPick.Items.Add('(no snapshots yet)'); $snapPick.SelectedIndex = 0 }
+}
+Add-Tool $f 'Take snapshot' 'Save what''s installed now' {
+    Start-Background 'Snapshot' $CoreWork @($HallowRoot, 'Save-SystemSnapshot') { param($o) foreach ($l in $o | Where-Object { $_ -is [string] -and $_ -notlike '*.json' }) { Log $l }; Update-SnapshotCombo; Log 'Snapshot saved. Install or update things, then click Compare with now.' }
+} -Primary -Width 210 | Out-Null
+(New-RowLabel $f 'Compare' 64).Margin = New-Object System.Windows.Forms.Padding(2, 18, 6, 6)
+$snapPick = New-DarkCombo $f 220
+$snapPick.Margin = New-Object System.Windows.Forms.Padding(0, 20, 10, 8)
+Add-Tool $f 'Compare with now' 'What changed since then' {
+    $files = @(Get-SnapshotFiles)
+    if (-not $files -or $snapPick.SelectedIndex -ge $files.Count) { Log 'Take a snapshot first.'; return }
+    $old = Get-Content -LiteralPath $files[$snapPick.SelectedIndex].FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+    $script:SnapOld = $old
+    Start-Background 'Snapshot compare' $CoreWork @($HallowRoot, 'Get-SystemSnapshot') {
+        param($o)
+        $now = $o | Where-Object { $_ -is [System.Collections.IDictionary] } | Select-Object -First 1
+        $rows = @(Compare-SystemSnapshot $script:SnapOld $now)
+        $snapList.Items.Clear()
+        foreach ($r in $rows | Sort-Object Change, Kind, Item) {
+            $li = New-Object System.Windows.Forms.ListViewItem($r.Change)
+            [void]$li.SubItems.Add($r.Kind); [void]$li.SubItems.Add($r.Item); [void]$li.SubItems.Add($r.Detail); $li.ToolTipText = "$($r.Item)`n$($r.Detail)"
+            $li.ForeColor = $(if ($r.Change -eq 'Added') { $C.Warn } elseif ($r.Change -eq 'Removed') { $C.Muted } else { $C.Text })
+            [void]$snapList.Items.Add($li)
+        }
+        $added = @($rows | Where-Object Change -eq 'Added').Count
+        Log ("Compared with {0}: {1} added, {2} removed, {3} changed." -f $snapPick.SelectedItem, $added, @($rows | Where-Object Change -eq 'Removed').Count, @($rows | Where-Object Change -eq 'Changed').Count)
+    }
+} -Width 210 | Out-Null
+$f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
+$snapList = New-DarkList $f @(@('Change', 80), @('Kind', 120), @('Item', 400), @('Details', 280)) 880 180 $false
+$snapList.ShowItemToolTips = $true; $f.SetFlowBreak($snapList, $true)
+[void]$script:AfterShown.Add({ Update-SnapshotCombo })

@@ -1016,7 +1016,6 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 . (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowAppsPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowGameExtrasPage.ps1')
-. (Join-Path $PSScriptRoot 'HallowMorePage.ps1')
 
 # ================================================================ PAGE: TOOLS
 $f = Add-Page 'Tools' ([char]0x2692) 'Handy Windows tools in one place'
@@ -1119,6 +1118,8 @@ foreach ($l in $launchers) {
     $code += "; Log 'Opened $($l[0]).'"
     Add-Tool $f $l[0] $l[1] ([scriptblock]::Create($code)) | Out-Null
 }
+
+. (Join-Path $PSScriptRoot 'HallowMorePage.ps1')   # adds sections to pages built above (incl. Tools)
 
 # ---- go
 $form.Add_Shown({
