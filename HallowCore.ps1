@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '4.4'
+$AppVersion = '4.5'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
