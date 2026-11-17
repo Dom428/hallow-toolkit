@@ -166,7 +166,12 @@ function Get-DashboardHtml($State) {
             $np = "<div class='np'><div class='nt'>$(& $e $n.title)</div><div class='m'>$(& $e (@($n.artist, $n.app) | Where-Object { $_ }) -join ' - ')$(if (-not $n.playing) { ' (paused)' })</div>" +
                   "<div class='nb'><a class='b' href='/$tok/media/prev'>&#9198;</a><a class='b w' href='/$tok/media/playpause'>$(if ($n.playing) { 'Pause' } else { 'Play' })</a><a class='b' href='/$tok/media/next'>&#9197;</a></div></div>"
         }
-        $mixHtml = "<h2>Mixer</h2>$np<table>$($mr -join '')</table><div class='ps'>$($pb -join '')</div>"
+        $pf = ''
+        if (@($mx.profiles).Count -gt 1) {
+            $i = 0; $pfb = foreach ($p in @($mx.profiles)) { "<a class='b w $(if ($p -eq $mx.profile) { 'cur' })' href='/$tok/profile/$i'>$(& $e $p)</a>"; $i++ }
+            $pf = "<div class='m pl'>Profile</div><div class='pf'>$($pfb -join '')</div>"
+        }
+        $mixHtml = "<h2>Mixer</h2>$np<table>$($mr -join '')</table><div class='ps'>$($pb -join '')</div>$pf"
     }
     $rows = foreach ($d in @(Get-DriveSpace)) { "<tr><td>$(& $e $d.Drive) $(& $e $d.Label)</td><td class='$(if ($d.FreePct -lt 10) { 'bad' } else { '' })'>$($d.FreeGB) GB free ($($d.FreePct)%)</td></tr>" }
     $srv = foreach ($r in @($State.Servers | Where-Object { $_.Kind -ne 'Drive' })) { "<tr><td>$(& $e $r.Name)</td><td class='$(if ($r.Verdict -eq 'Good') { 'good' } else { 'bad' })'>$(& $e $r.Status)</td></tr>" }
@@ -181,6 +186,7 @@ h1{color:#f07820;font-size:22px;margin:0 0 2px}.m{color:#8f88a0;font-size:13px}h
 td{padding:7px 8px;border-bottom:1px solid #2c2538;font-size:14px}.good{color:#6ed28c}.warn{color:#f0be5a}.bad{color:#f05a5a}
 .mx{text-align:right;white-space:nowrap}.b{display:inline-block;min-width:38px;padding:8px 10px;margin-left:6px;border-radius:6px;background:#2f2740;color:#ece8f4;text-decoration:none;text-align:center;font-weight:600}
 .np{background:#241e2e;border-radius:6px;padding:10px 12px;margin-bottom:8px}.nt{font-weight:600;font-size:15px;overflow-wrap:anywhere}.nb{margin-top:8px}.nb .b{margin:0 6px 0 0}
+.pl{margin-top:8px}.pf{margin-top:4px}.pf .b{margin:0 6px 6px 0}.b.cur{background:#a98be0;color:#16121c}
 .b.w{min-width:64px}.b.on{background:#f05a5a;color:#16121c}.p{display:inline-block;width:46px;text-align:center}.ps{margin-top:10px}.ps .b{margin:0 6px 6px 0;background:#f07820;color:#16121c}
 </style></head><body><h1>HALLOW</h1><div class='m'>$(& $e $env:COMPUTERNAME) - updated $(Get-Date -Format 'HH:mm:ss') - refreshes every 15 s</div>
 <h2>Now</h2><div class='g'>$($tiles -join '')</div>$mixHtml<h2>Servers</h2><table>$($srv -join '')</table><h2>Drives</h2><table>$($rows -join '')</table>
@@ -195,6 +201,10 @@ function Invoke-DashAction([string]$Action) {
         $r = if ($op -eq 'mute') { Invoke-Mixer "/mute?ch=$ch&m=toggle" } else { Invoke-Mixer "/set?ch=$ch&d=$(if ($op -eq 'up') { 10 } else { -10 })" }
     } elseif ($Action -eq '/mic/mute') { $r = Invoke-Mixer '/mic?mute=toggle' }
     elseif ($Action -match '^/media/(playpause|next|prev)$') { $r = Invoke-Mixer "/media?do=$($Matches[1])" }
+    elseif ($Action -match '^/profile/(\d{1,2})$') {
+        $i = [int]$Matches[1]; $st = Invoke-Mixer '/state'
+        if ($st -and $i -lt @($st.profiles).Count) { $r = Invoke-Mixer ('/profile?name=' + [uri]::EscapeDataString(@($st.profiles)[$i])) }
+    }
     elseif ($Action -match '^/preset/(\d{1,2})$') {
         $i = [int]$Matches[1]; $st = Invoke-Mixer '/state'
         if ($st -and $i -lt @($st.presets).Count) { $r = Invoke-Mixer ('/preset?name=' + [uri]::EscapeDataString(@($st.presets)[$i])) }
