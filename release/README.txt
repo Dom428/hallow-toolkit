@@ -9,6 +9,76 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.1
+- A modern look: rounded tool cards with a soft outline, a rounded highlight with an accent bar
+  on the open page in the sidebar, the logo next to the name, and a dark window title bar.
+
+WHAT'S NEW IN 5.0
+- A new icon: an orange gear with a tune-up bolt, instead of the plain H. Shortcuts may show
+  the old one for a little while until Windows refreshes its icon cache.
+
+WHAT'S NEW IN 4.9
+- Phone dashboard: switch Hallow Mixer profiles (needs Hallow Mixer 3.9 with two or more profiles).
+
+WHAT'S NEW IN 4.8
+- Server tab > Discord posts: two new switches, both off until you turn them on (needs Hallow
+  Mixer 2.7 running). Listening to: posts songs from apps in the mixer's Music channel after 30 s
+  of playing (skipped songs and browser videos are never posted). Mic status: posts "Mic muted" /
+  "Mic back on" when a change lasts 10 seconds.
+
+WHAT'S NEW IN 4.7
+- Phone dashboard: see what's playing on your PC (song or video) with Previous, Play/Pause and
+  Next buttons - needs Hallow Mixer 2.5 running.
+
+WHAT'S NEW IN 4.6
+- Share your setup now carries your Hallow Mixer settings too: presets, which app goes in which
+  channel, ducking, mic mode and your headset and mic EQ. Importing puts the EQ on your own
+  headset and mic. Devices, OBS details and saved game levels are never included.
+
+WHAT'S NEW IN 4.5
+- Server tab > Hallow Mixer: install (newest release from GitHub, checksum checked) or open
+  Hallow Mixer, the free per-app volume mixer - game, chat, music and media on their own faders.
+- Phone dashboard: if Hallow Mixer is running, change each channel's level, mute, the mic and
+  presets from your phone. The mixer only listens on this PC, behind its own key.
+
+WHAT'S NEW IN 4.4
+- Server tab > Discord posts: connect a channel (webhook link) and the tray app posts your game
+  sessions and server alerts there. The link stays on your PC and is never shared with your setup.
+- Server tab > Phone dashboard: temps, load, what you're playing, servers and drives on your
+  phone - read-only, only over Tailscale, behind a private link. The tray app serves it.
+- Tray menu > Sleep / shut down timer: 30 min to 3 hours, a warning a minute before, cancel any
+  time - and if you're still in a game it waits 15 more minutes.
+
+WHAT'S NEW IN 4.3
+- Health tab > Security check (read-only): antivirus on and up to date, firewall, User Account
+  Control, old SMB1 file sharing, Remote Desktop, startup programs that are unsigned or run from
+  temp folders, programs open to your network, and browser extensions that can read every site.
+  Double-click a row to open the right setting. Plus Quick virus scan and Update virus definitions.
+- Tools tab > Before / after snapshot: save a list of your apps, startup items, services, scheduled
+  tasks and browser extensions, then compare later to see exactly what an installer added.
+
+WHAT'S NEW IN 4.2
+- Gaming tab > Game won't launch?: checks for missing runtimes (Visual C++, DirectX, .NET,
+  WebView2), switched-off anti-cheat (Easy Anti-Cheat, BattlEye, Vanguard, FACEIT), Windows
+  Security's Controlled folder access blocking saves, a pending restart and full drives.
+  Fix problems installs or turns back on what's missing.
+- Mic tab > Audio switcher: save two setups (e.g. speakers + webcam mic, headset + headset mic) and
+  flip between them in one click, from the tray menu, or with Ctrl+Alt+Home.
+- Tune-up tab > Windows Update control: pause updates for 7 days, stop Windows replacing your
+  drivers, and see update history - what failed and what the error means.
+- Games tab > Move Steam games: move games (and their workshop mods) between drives in one go.
+- Network tab > Lag under load test: does your ping jump when someone streams or downloads?
+  Graded A+ to F, with the fix if it does.
+- Clips & screenshots now also finds OBS recordings.
+
+WHAT'S NEW IN 4.1
+- Real toggle switches: green = on, grey = off. Every on/off button (weekly clean-up, weekly save
+  backup, tray app with Windows, auto update check, server alerts, keep my mic level) shows one,
+  and it flips the moment you click.
+- Tweaks tab: the tick boxes are now toggle switches showing what's set on this PC right now. A
+  switch you've flipped but not applied yet gets a yellow ring and "not applied".
+- Tray menu: Game session says when it's ON.
+
 WHAT'S NEW IN 4.0
 - Storage tab > Game launcher caches: Steam, Epic, Battle.net, EA, Ubisoft, Riot, GOG, Discord
   and Medal keep web and download caches that grow to GBs. Clear them in one click - games,
@@ -105,6 +175,27 @@ WHAT'S NEW IN 3.1
 - Drivers tab: newest motherboard drivers + BIOS straight from the maker (ASUS fully automatic;
   MSI/Gigabyte/ASRock open the support page), plus Windows Update drivers for any brand.
 - Auto update: the toolkit checks for a new version when it opens and asks before updating.
+
+WHAT'S NEW IN 3.0
+- Tweaks tab: privacy, quality-of-life and gaming switches with Undo all; debloat; startup manager;
+  background services helper.
+- Dev tab: port killer, dev cache cleaner, git status of all your projects.
+- Game session recording with a chart, game save backup (with weekly auto-backup), old clips finder.
+- Game server ping, DNS speed test, benchmark with history, sleep & wake doctor, Disk map.
+- Opens about a second faster. First shareable zip with INSTALL.bat.
+
+WHAT'S NEW IN 2.0
+- Health tab: crash detective, memory test, drive health, driver age check.
+- Games tab: every installed game with size, store and last played.
+- Uninstall tab (like Revo): uninstall, then sweep up leftovers - files to the Recycle Bin,
+  registry backed up first.
+- Tray app: Auto Game Boost and the Ctrl+Alt+End panic key.
+- Speed test, apps using the internet, Downloads/project/duplicate cleaners, CPU temperature.
+
+VERSION 1.0
+- The first Hallow Toolkit: Tune-up, Monitor, Gaming, Network, Storage and Tools tabs - Quick
+  Clean-up, health report, app updates, weekly auto clean-up, live monitor, ping test, biggest
+  folders and more.
 
 TIPS
 - Start with the Tune-up page > Health report. It only reads, changes nothing.

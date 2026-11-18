@@ -1,4 +1,4 @@
-<#
+﻿<#
   Hallow Toolkit - tune-up, monitor, health, gaming, games, network, storage and quick tools for this PC.
   Double-click "Hallow Toolkit.bat" (or the Desktop shortcut) and click Yes on the admin prompt.
 
@@ -61,6 +61,46 @@ $C = @{
     Text = RGB 236 232 244; Muted = $tb.Muted; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
 }
 function New-Font([float]$Size, [string]$Style = 'Regular', [string]$Family = 'Segoe UI') { New-Object System.Drawing.Font($Family, $Size, [System.Drawing.FontStyle]$Style) }
+# v5.1 look: rounded shapes, dark title bar and dark scrollbars
+function New-RoundPath([float]$X, [float]$Y, [float]$W, [float]$H, [float]$R) {
+    $p = New-Object System.Drawing.Drawing2D.GraphicsPath; $d = $R * 2
+    $p.AddArc($X, $Y, $d, $d, 180, 90); $p.AddArc(($X + $W - $d), $Y, $d, $d, 270, 90)
+    $p.AddArc(($X + $W - $d), ($Y + $H - $d), $d, $d, 0, 90); $p.AddArc($X, ($Y + $H - $d), $d, $d, 90, 90); $p.CloseFigure(); $p
+}
+if (-not ('HallowDark' -as [type])) {
+    Add-Type -Namespace '' -Name HallowDark -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(System.IntPtr h, int a, ref int v, int s);
+[System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern int SetWindowTheme(System.IntPtr h, string app, string id);
+'@
+}
+function Set-DarkChrome($Control) {
+    try {
+        if ($Control -is [System.Windows.Forms.Form]) { $v = 1; [void][HallowDark]::DwmSetWindowAttribute($Control.Handle, 20, [ref]$v, 4) }
+        elseif ($Control -is [System.Windows.Forms.ScrollableControl] -or $Control -is [System.Windows.Forms.TextBoxBase] -or $Control -is [System.Windows.Forms.ListView] -or $Control -is [System.Windows.Forms.ListBox]) {
+            [void][HallowDark]::SetWindowTheme($Control.Handle, 'DarkMode_Explorer', $null)
+        }
+        foreach ($c in $Control.Controls) { Set-DarkChrome $c }
+    } catch { }
+}
+# Sidebar buttons: a rounded pill behind the open page, with an accent bar on its left.
+$script:NavPaint = {
+    param($s, $e)
+    $g = $e.Graphics; $w = $s.Width; $h = $s.Height
+    $on = ($s.Tag -eq $script:CurrentPage)
+    $hot = $s.ClientRectangle.Contains($s.PointToClient([System.Windows.Forms.Cursor]::Position))
+    $g.Clear($C.Nav); $g.SmoothingMode = 'AntiAlias'
+    if ($on -or $hot) {
+        $rp = New-RoundPath 10 2 ($w - 20) ($h - 4) 9
+        $br = New-Object System.Drawing.SolidBrush($(if ($on) { $C.PanelHi } else { $C.Panel })); $g.FillPath($br, $rp); $br.Dispose(); $rp.Dispose()
+    }
+    if ($on) { $ab = New-Object System.Drawing.SolidBrush($C.Accent); $g.FillRectangle($ab, 10, 9, 3, ($h - 18)); $ab.Dispose() }
+    $g.SmoothingMode = 'Default'
+    $x = 26
+    if ($s.Image) { $g.DrawImage($s.Image, $x, [int](($h - $s.Image.Height) / 2), $s.Image.Width, $s.Image.Height); $x += $s.Image.Width + 12 }
+    $txt = "$($s.Text)".Trim()
+    [System.Windows.Forms.TextRenderer]::DrawText($g, $txt, $s.Font, (New-Object System.Drawing.Rectangle($x, 0, ($w - $x - 8), $h)), $(if ($on) { $C.Accent } else { $C.Text }),
+        [System.Windows.Forms.TextFormatFlags]'Left, VerticalCenter, SingleLine, NoPrefix, EndEllipsis')
+}
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = $AppName
@@ -103,13 +143,26 @@ $nav = New-Object System.Windows.Forms.Panel
 $nav.Dock = 'Left'; $nav.Width = 220; $nav.BackColor = $C.Nav
 $form.Controls.Add($nav)
 
+$logo = New-Object System.Windows.Forms.PictureBox
+$logo.Size = New-Object System.Drawing.Size(40, 40); $logo.Location = New-Object System.Drawing.Point(20, 26); $logo.SizeMode = 'Zoom'
+# the .ico holds PNG images: take the largest one straight from the file (Icon.ToBitmap can't read PNG entries)
+function Get-IcoImage([string]$Path) {
+    try {
+        $b = [IO.File]::ReadAllBytes($Path); $n = [BitConverter]::ToUInt16($b, 4); $best = -1; $bw = 0
+        for ($i = 0; $i -lt $n; $i++) { $o = 6 + 16 * $i; $w = $b[$o]; if ($w -eq 0) { $w = 256 }; if ($w -gt $bw) { $bw = $w; $best = $o } }
+        $len = [BitConverter]::ToInt32($b, $best + 8); $off = [BitConverter]::ToInt32($b, $best + 12)
+        $ms = New-Object IO.MemoryStream(, $b[$off..($off + $len - 1)]); [System.Drawing.Image]::FromStream($ms)
+    } catch { $null }
+}
+if (Test-Path $iconPath) { $logo.Image = Get-IcoImage $iconPath }
+$nav.Controls.Add($logo)
 $brand = New-Object System.Windows.Forms.Label
-$brand.Text = 'HALLOW'; $brand.Font = New-Font 22 'Bold'; $brand.ForeColor = $C.Accent
-$brand.Location = New-Object System.Drawing.Point(22, 20); $brand.AutoSize = $true
+$brand.Text = 'HALLOW'; $brand.Font = New-Font 18 'Bold'; $brand.ForeColor = $C.Accent
+$brand.Location = New-Object System.Drawing.Point(66, 20); $brand.AutoSize = $true
 $nav.Controls.Add($brand)
 $brand2 = New-Object System.Windows.Forms.Label
-$brand2.Text = "TOOLKIT  v$AppVersion"; $brand2.Font = New-Font 9 'Bold'; $brand2.ForeColor = $C.Purple
-$brand2.Location = New-Object System.Drawing.Point(25, 66); $brand2.AutoSize = $true
+$brand2.Text = "TOOLKIT  v$AppVersion"; $brand2.Font = New-Font 8.5 'Bold'; $brand2.ForeColor = $C.Purple
+$brand2.Location = New-Object System.Drawing.Point(69, 54); $brand2.AutoSize = $true
 $nav.Controls.Add($brand2)
 
 $adminLbl = New-Object System.Windows.Forms.Label
@@ -180,7 +233,8 @@ function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
     }
     $nb.Size = New-Object System.Drawing.Size(220, 36); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
     $nb.Cursor = [System.Windows.Forms.Cursors]::Hand
-    $nb.Add_Click({ Show-Page $this.Tag })
+    $nb.Add_Paint($script:NavPaint)
+    $nb.Add_Click({ Show-Page $this.Tag; foreach ($x in $navButtons) { $x.Invalidate() } })
     $nav.Controls.Add($nb); $navButtons.Add($nb)
     $script:navY += 38
     return $flow
@@ -249,7 +303,13 @@ $script:ToolPaint = {
     $prim = $script:PrimaryButtons.Contains($s)
     $hot = $s.Enabled -and $s.ClientRectangle.Contains($s.PointToClient([System.Windows.Forms.Cursor]::Position))
     $bg = if ($prim) { if ($hot) { $C.AccentHover } else { $C.Accent } } else { if ($hot) { $C.PanelHi } else { $C.Panel } }
-    $g.Clear($bg)
+    # v5.1: rounded card with a hairline border
+    $g.Clear($(if ($s.Parent) { $s.Parent.BackColor } else { $C.Bg }))
+    $g.SmoothingMode = 'AntiAlias'
+    $rp = New-RoundPath 0 0 ($w - 1) ($h - 1) 10
+    $br = New-Object System.Drawing.SolidBrush($bg); $g.FillPath($br, $rp); $br.Dispose()
+    if (-not $prim) { $pen = New-Object System.Drawing.Pen($(if ($hot) { $C.Grid } else { [System.Drawing.Color]::FromArgb(70, $C.Grid) }), 1); $g.DrawPath($pen, $rp); $pen.Dispose() }
+    $rp.Dispose(); $g.SmoothingMode = 'Default'
     $x = 14
     if ($s.Image) {
         $img = $s.Image
@@ -1128,6 +1188,7 @@ foreach ($l in $launchers) {
 
 # ---- go
 $form.Add_Shown({
+    Set-DarkChrome $form
     if (-not $pages.Contains($StartPage)) { $StartPage = 'Tune-up' }
     Show-Page $StartPage
     Log "$AppName v$AppVersion ready. Start with Quick Clean-up, or explore the tabs on the left."
@@ -1140,4 +1201,19 @@ $form.Add_Shown({
     $t.Start()
 })
 $form.Add_FormClosing({ $monTimer.Stop(); $jobTimer.Stop() })
+# Developer snapshots: HALLOW_SNAP=<folder> renders pages off-screen to PNGs and exits (no startup tasks run).
+if ($env:HALLOW_SNAP) {
+    $script:AfterShown.Clear()
+    $form.ShowInTaskbar = $false; $form.StartPosition = 'Manual'; $form.Location = New-Object System.Drawing.Point(-32000, -32000)
+    $form.Show(); Set-DarkChrome $form; [System.Windows.Forms.Application]::DoEvents()
+    New-Item -ItemType Directory -Force $env:HALLOW_SNAP | Out-Null
+    foreach ($p in @(($env:HALLOW_SNAP_PAGES -split ',') | Where-Object { $_ })) {
+        Show-Page $p; 1..5 | ForEach-Object { [System.Windows.Forms.Application]::DoEvents() }
+        if (-not ('HallowPw' -as [type])) { Add-Type -Namespace '' -Name HallowPw -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool PrintWindow(System.IntPtr h, System.IntPtr dc, uint f);' }
+        $bmp = New-Object System.Drawing.Bitmap($form.Width, $form.Height); $gg = [System.Drawing.Graphics]::FromImage($bmp); $dc = $gg.GetHdc()
+        [void][HallowPw]::PrintWindow($form.Handle, $dc, 2); $gg.ReleaseHdc($dc); $gg.Dispose()
+        $bmp.Save((Join-Path $env:HALLOW_SNAP "$($p -replace '[^\w-]', '').png")); $bmp.Dispose()
+    }
+    $form.Close(); return
+}
 [void]$form.ShowDialog()
