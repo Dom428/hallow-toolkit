@@ -35,6 +35,14 @@
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
 
+### 5.8 - Hallow accent and crash reports
+- Hallow tab: pick one accent colour for all the Hallow apps (8 swatches or your own); the toolkit can use it too
+- Crash reports kept on this PC, with a notice on the next start; Check links shows apps that crashed this week
+
+### 5.9 - Pre-game check and scheduled clean-up
+- Pre-game check (Gaming tab and tray): restart-pending updates, app updates, RAM, game drive space, GPU / CPU, apps that hurt games, NVIDIA driver age, Hallow apps running - with fixes
+- Scheduled clean-up (opt-in): weekly or monthly at your time, with the Quick Clean-up items you pick, and a report of what was freed
+
 ### Later
 - Drivers: fully automatic for MSI and Gigabyte boards, like ASUS today
 - BIOS 2503 for this PC: on hold
