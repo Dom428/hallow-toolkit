@@ -131,7 +131,7 @@ $miStartup.Add_Click({ Set-TrayAtStartup $miStartup.Checked })
 [void]$menu.Items.Add($miStartup)
 [void]$menu.Items.Add('-')
 $miExit = $menu.Items.Add('Exit tray app')
-$miExit.Add_Click({ $timer.Stop(); $dashTimer.Stop(); if ($script:Dash) { try { $script:Dash.Stop() } catch { } }; $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
+$miExit.Add_Click({ Restore-RulePower; $timer.Stop(); $dashTimer.Stop(); if ($script:Dash) { try { $script:Dash.Stop() } catch { } }; $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
 if (Test-IconFont) {
     $ic = [System.Drawing.Color]::FromArgb(70, 60, 90)
     foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miPreGame, 'clipboard-check'), @($miAudio, 'volume-high'), @($miTimer, 'moon'), @($miExit, 'power-off'))) {
@@ -297,6 +297,14 @@ function Test-PowerTimer {
     }
 }
 
+# ---- v5.10 per-game rules: put the power plan back (only if nothing else changed it meanwhile)
+$script:Rule = $null; $script:RulePower = $null
+function Restore-RulePower {
+    $rp = $script:RulePower; $script:RulePower = $null
+    if (-not $rp) { return }
+    try { if ((Get-ActiveSchemeGuid) -eq $rp.Set) { powercfg /setactive $rp.Prev | Out-Null; Log "[tray] Power plan back to $(Get-SchemeName)" } } catch { }
+}
+
 # ---- auto game boost loop
 $script:InGame = $null; $script:Closed = @(); $script:Misses = 0; $script:HotWarned = $false
 $timer = New-Object System.Windows.Forms.Timer
@@ -351,7 +359,18 @@ $timer.Add_Tick({
             $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
             $script:DashState.InGame = $g.Name; $script:DashState.GameStart = Get-Date
             $script:SessStart = Get-Date; $script:Samples = New-Object System.Collections.Generic.List[object]
-            if ($miPrio.Checked) { $pn = Set-GamePriority $g.Id; if ($pn) { Log "[tray] $pn set to High priority" } }
+            # v5.10: this game's rule (priority, cores, power plan)
+            $script:Rule = Find-GameRule $g; $script:RuleDone = New-Object 'System.Collections.Generic.HashSet[int]'; $script:RuleGame = $g.Process
+            if ($script:Rule) {
+                $n = @(Set-GameRuleProcesses $script:Rule $g.Process $script:RuleDone).Count
+                $pw = ''
+                if ($script:Rule.Power) {
+                    $prev = Get-ActiveSchemeGuid
+                    if ($prev -and $prev -ne $script:Rule.Power) { powercfg /setactive $script:Rule.Power | Out-Null; $script:RulePower = @{ Prev = $prev; Set = $script:Rule.Power }; $pw = ", power plan $(Get-SchemeName)" }
+                }
+                Log "[tray] Rule for $($g.Name): $($RulePriorities[$script:Rule.Priority]) priority, $($RuleAffinities[$script:Rule.Affinity].ToLower())$pw ($n process(es))"
+            }
+            if ($miPrio.Checked -and -not $script:Rule) { $pn = Set-GamePriority $g.Id; if ($pn) { Log "[tray] $pn set to High priority" } }
             $s = Get-Settings
             if ($s.AutoBoost -and $s.BoostApps.Count) {
                 $running = @($s.BoostApps | Where-Object { Get-Process -Name $_ -ErrorAction SilentlyContinue })
@@ -364,6 +383,7 @@ $timer.Add_Tick({
             $script:Misses++
             if ($script:Misses -ge 2) {
                 $name = $script:InGame; $script:InGame = $null
+                Restore-RulePower; $script:Rule = $null
                 if ($miRecord.Checked -and $script:Samples.Count -ge 2) {
                     $sum = Save-GameSession $name $script:SessStart $script:Samples
                     if ($sum) {
@@ -385,7 +405,7 @@ $timer.Add_Tick({
                 } else { Log "[tray] Game closed: $name" }
                 $script:Closed = @()
             }
-        } elseif ($g) { $script:Misses = 0 }
+        } elseif ($g) { $script:Misses = 0; if ($script:Rule) { [void](Set-GameRuleProcesses $script:Rule $script:RuleGame $script:RuleDone) } }   # processes the game starts later
     } catch { Log "[tray] error: $($_.Exception.Message)" }
 })
 $timer.Start()

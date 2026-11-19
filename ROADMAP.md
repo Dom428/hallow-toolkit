@@ -31,14 +31,12 @@
 | **5.7** | Check links: is every Hallow app running and linked, with one-click fixes; daily tray check |
 | **5.8** | One Hallow accent colour for all the apps; crash reports kept on this PC, crashes in Check links |
 | **5.9** | Pre-game check (Gaming tab and tray); scheduled clean-up with reports (opt-in) |
+| **5.10** | Per-game rules: priority, CPU cores and power plan while a game runs |
 
 ## Next
 
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.10 - Per-game rules
-- Process Lasso style rules per game: priority, CPU cores and power plan while it runs, put back after
 
 ### 5.11 - App updates and startup impact
 - App updates like UniGetUI: every winget upgrade with its own Update button, Ignore (and un-ignore), nothing runs until you click

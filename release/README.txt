@@ -9,6 +9,12 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.10
+- Gaming > Per-game rules (like Process Lasso): pick a game and set its priority, which CPU cores
+  it uses (all, first half - the 3D V-Cache cores on most X3D chips -, second half, or all but the
+  first core) and a power plan. The tray app applies the rule when the game starts, also to
+  anything the game starts later, and puts your power plan back when it closes.
+
 WHAT'S NEW IN 5.9
 - Gaming > Pre-game check (also in the tray menu): a quick read-only look before you play -
   Windows updates waiting for a restart, app updates (winget), RAM, free space on your game
