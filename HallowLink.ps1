@@ -173,6 +173,16 @@ function Get-DashboardHtml($State) {
         }
         $mixHtml = "<h2>Mixer</h2>$np<table>$($mr -join '')</table><div class='ps'>$($pb -join '')</div>$pf"
     }
+    $gamesHtml = ''
+    $hg = Get-HubGames
+    if ($hg -and @($hg.games).Count) {
+        $tok = Get-DashToken; $i = 0
+        $gr = foreach ($g in @($hg.games)) {
+            $act = if ($g.playing) { "<span class='good'>Playing</span>" } else { "<a class='b w' href='/$tok/game/$i'>Play</a>" }
+            "<tr><td>$(& $e $g.name)</td><td class='mx'>$act</td></tr>"; $i++
+        }
+        $gamesHtml = "<h2>Games</h2><table>$($gr -join '')</table>"
+    }
     $rows = foreach ($d in @(Get-DriveSpace)) { "<tr><td>$(& $e $d.Drive) $(& $e $d.Label)</td><td class='$(if ($d.FreePct -lt 10) { 'bad' } else { '' })'>$($d.FreeGB) GB free ($($d.FreePct)%)</td></tr>" }
     $srv = foreach ($r in @($State.Servers | Where-Object { $_.Kind -ne 'Drive' })) { "<tr><td>$(& $e $r.Name)</td><td class='$(if ($r.Verdict -eq 'Good') { 'good' } else { 'bad' })'>$(& $e $r.Status)</td></tr>" }
     if (-not $srv) { $srv = "<tr><td colspan='2' class='m'>Checked every 5 minutes by the tray app (turn on Server alerts)</td></tr>" }
@@ -189,17 +199,32 @@ td{padding:7px 8px;border-bottom:1px solid #2c2538;font-size:14px}.good{color:#6
 .pl{margin-top:8px}.pf{margin-top:4px}.pf .b{margin:0 6px 6px 0}.b.cur{background:#a98be0;color:#16121c}
 .b.w{min-width:64px}.b.on{background:#f05a5a;color:#16121c}.p{display:inline-block;width:46px;text-align:center}.ps{margin-top:10px}.ps .b{margin:0 6px 6px 0;background:#f07820;color:#16121c}
 </style></head><body><h1>HALLOW</h1><div class='m'>$(& $e $env:COMPUTERNAME) - updated $(Get-Date -Format 'HH:mm:ss') - refreshes every 15 s</div>
-<h2>Now</h2><div class='g'>$($tiles -join '')</div>$mixHtml<h2>Servers</h2><table>$($srv -join '')</table><h2>Drives</h2><table>$($rows -join '')</table>
+<h2>Now</h2><div class='g'>$($tiles -join '')</div>$mixHtml$gamesHtml<h2>Servers</h2><table>$($srv -join '')</table><h2>Drives</h2><table>$($rows -join '')</table>
 </body></html>
 "@
 }
 
+# Hallow Hub's recent games (Hub writes this list); only offered while Hub is running, so the game starts through Hub as you
+function Get-HubGames {
+    if (-not (Get-Process HallowHub -ErrorAction SilentlyContinue)) { return $null }
+    $f = Join-Path $env:APPDATA 'HallowHub\recent.json'
+    if (-not (Test-Path $f)) { return $null }
+    try { Get-Content $f -Raw | ConvertFrom-Json } catch { $null }
+}
 # Mixer taps from the phone: /<key>/mix/<channel>/up|down|mute, /<key>/mic/mute, /<key>/preset/<n>, /<key>/media/playpause|next|prev. Returns what happened.
 function Invoke-DashAction([string]$Action) {
     if ($Action -match '^/mix/(game|chat|music|media|other)/(up|down|mute)$') {
         $ch = $Matches[1]; $op = $Matches[2]
         $r = if ($op -eq 'mute') { Invoke-Mixer "/mute?ch=$ch&m=toggle" } else { Invoke-Mixer "/set?ch=$ch&d=$(if ($op -eq 'up') { 10 } else { -10 })" }
     } elseif ($Action -eq '/mic/mute') { $r = Invoke-Mixer '/mic?mute=toggle' }
+    elseif ($Action -match '^/game/(\d{1,2})$') {
+        $i = [int]$Matches[1]; $h = Get-HubGames
+        if ($h -and $i -lt @($h.games).Count -and (Test-Path $h.exe)) {
+            $g = @($h.games)[$i]
+            Start-Process -FilePath $h.exe -ArgumentList @('--play', ('"' + $g.id + '"'))
+            return "Starting $($g.name)"
+        }
+    }
     elseif ($Action -match '^/media/(playpause|next|prev)$') { $r = Invoke-Mixer "/media?do=$($Matches[1])" }
     elseif ($Action -match '^/profile/(\d{1,2})$') {
         $i = [int]$Matches[1]; $st = Invoke-Mixer '/state'

@@ -9,6 +9,10 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.3
+- Phone dashboard: a Games section with your recent Hallow Hub games and a Play button for each
+  (needs Hallow Hub 1.9 running; games start through Hub, so your Mixer preset and game session apply).
+
 WHAT'S NEW IN 5.2
 - Works with Hallow Hub (new app): Hub can turn your game session on when a game starts and off
   when it closes, so Boost apps and High performance power follow your games by themselves.
