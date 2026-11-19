@@ -389,6 +389,35 @@ function Get-StartupItems {
         [pscustomobject]@{ Name = $t.TaskName; Command = $cmd; Source = $(if ($t.TaskPath -eq '\Hallow\') { 'Delayed by Hallow' } else { 'Scheduled task at sign-in' }); Kind = 'Task'; Hive = $null; Approved = $null; Key = $t.TaskPath; Enabled = ($t.State -ne 'Disabled'); MB = (& $mem $cmd) }
     }
 }
+# v5.11: startup impact (estimate). Windows' own rating comes from boot traces only Task Manager reads, so this uses what
+# the app costs now - RAM and CPU time per hour since it started - plus Windows' "slowed down startup" events (last 30 days).
+function Add-StartupImpact($Items) {
+    $slow = @()
+    try {
+        $slow = @(Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-Diagnostics-Performance/Operational'; Id = 101, 102, 103, 106, 109; StartTime = (Get-Date).AddDays(-30) } -ErrorAction Stop |
+            ForEach-Object { foreach ($v in $_.Properties) { if ("$($v.Value)" -match '([^\\/"]+)\.exe') { $Matches[1].ToLower() } } } | Select-Object -Unique)
+    } catch { }
+    $procs = Get-Process | Group-Object ProcessName -AsHashTable -AsString
+    foreach ($i in @($Items)) {
+        $exe = if ("$($i.Command)" -match '([^\\/"]+)\.exe') { $Matches[1] } elseif ($i.Kind -eq 'Folder') { [IO.Path]::GetFileNameWithoutExtension("$($i.Key)") } else { $null }
+        $ps = if ($exe -and $procs -and $procs.ContainsKey($exe)) { @($procs[$exe]) } else { @() }
+        $isSlow = $exe -and ($slow -contains $exe.ToLower())
+        $impact = 'Not running'; $why = ''
+        if ($ps.Count) {
+            $cpu = 0.0; $start = Get-Date
+            foreach ($p in $ps) { try { $cpu += $p.TotalProcessorTime.TotalSeconds; if ($p.StartTime -lt $start) { $start = $p.StartTime } } catch { } }
+            $mb = [math]::Round(($ps | Measure-Object WorkingSet64 -Sum).Sum / 1MB)
+            $hrs = 0.25; try { $hrs = [math]::Max(0.25, ([datetime]::Now - [datetime]$start).TotalHours) } catch { }
+            $rate = $cpu / $hrs
+            $impact = if ($isSlow -or $mb -ge 300 -or $rate -ge 120) { 'High' } elseif ($mb -ge 100 -or $rate -ge 20) { 'Medium' } else { 'Low' }
+            $why = '{0} MB, {1:N0} s CPU per hour' -f $mb, $rate
+        } elseif (-not $i.Enabled) { $impact = 'Off' }
+        elseif ($isSlow) { $impact = 'High' }
+        if ($isSlow) { $why = ($why + '; Windows says it slowed down startup').TrimStart('; ') }
+        $i | Add-Member Impact $impact -Force; $i | Add-Member ImpactWhy $why -Force
+    }
+    $Items
+}
 function Set-StartupItem($I, [bool]$Enabled) {
     if (($I.Hive -eq 'HKLM' -or $I.Kind -eq 'Task') -and -not $IsAdmin -and $I.Source -ne 'Delayed by Hallow') { Log "Skipped $($I.Name) (needs admin)"; return }
     if ($I.Kind -eq 'Task') {

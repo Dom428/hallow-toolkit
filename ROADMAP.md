@@ -32,15 +32,12 @@
 | **5.8** | One Hallow accent colour for all the apps; crash reports kept on this PC, crashes in Check links |
 | **5.9** | Pre-game check (Gaming tab and tray); scheduled clean-up with reports (opt-in) |
 | **5.10** | Per-game rules: priority, CPU cores and power plan while a game runs |
+| **5.11** | App updates with per-app Update and Ignore; startup impact |
 
 ## Next
 
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.11 - App updates and startup impact
-- App updates like UniGetUI: every winget upgrade with its own Update button, Ignore (and un-ignore), nothing runs until you click
-- Startup apps show their impact (High / Medium / Low) from what they cost at sign-in
 
 ### 5.12 - System info, debloat presets, browser clean-up
 - System info page: CPU, GPU, RAM sticks and speed, motherboard, BIOS, drives with SMART health where Windows can read it

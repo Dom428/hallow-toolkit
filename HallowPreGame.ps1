@@ -76,7 +76,7 @@ $PreGameWork = {
     # app updates (winget, read-only list) - last because it's the slowest
     if ($Opt.WingetWork) {
         try {
-            $rows = @(& ([scriptblock]::Create($Opt.WingetWork)) | Where-Object { $_.Id })
+            $rows = @(& ([scriptblock]::Create($Opt.WingetWork)) | Where-Object { $_.Id -and @($Opt.Ignored) -notcontains $_.Id })
             if ($rows.Count) { Add-Line 'apps' 'warn' ("{0} app update(s) available: {1}{2}" -f $rows.Count, (@($rows | Select-Object -First 4 | ForEach-Object Name) -join ', '), $(if ($rows.Count -gt 4) { '...' })) 'updateapps' $null }
             else { Add-Line 'apps' 'good' 'Apps are up to date (winget)' $null $null }
         } catch { }
@@ -90,7 +90,7 @@ function Get-GameDrives {
 }
 function Get-PreGameOptions([switch]$NoWinget) {
     @{
-        GameDrives = @(Get-GameDrives); NvSmi = $NvSmi; Local = $env:LOCALAPPDATA
+        GameDrives = @(Get-GameDrives); NvSmi = $NvSmi; Local = $env:LOCALAPPDATA; Ignored = @((Get-Settings).IgnoredUpdates | Where-Object { $_ })
         Hogs = @(@($BackgroundHogs) + @((Get-Settings).BoostApps) | Where-Object { $_ } | Select-Object -Unique)
         Hallow = @('Overlay', 'Clips' | Where-Object { Test-FamilyInstalled $_ })
         WingetWork = $(if ($NoWinget -or -not (Get-Command winget -ErrorAction SilentlyContinue)) { '' } else { $WingetListWork.ToString() })

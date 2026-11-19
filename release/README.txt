@@ -9,6 +9,13 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.11
+- Tune-up > App updates (like UniGetUI): Update this app updates just the one you clicked, and
+  Ignore hides an update you don't want (Show ignored brings it back). Nothing updates until you
+  click. Ignored updates don't count in the pre-game check either.
+- Tweaks > Startup apps: an Impact column (High / Medium / Low), worst first. It's an estimate
+  from the RAM and CPU each app uses and Windows' own "slowed down startup" events; hover for why.
+
 WHAT'S NEW IN 5.10
 - Gaming > Per-game rules (like Process Lasso): pick a game and set its priority, which CPU cores
   it uses (all, first half - the 3D V-Cache cores on most X3D chips -, second half, or all but the

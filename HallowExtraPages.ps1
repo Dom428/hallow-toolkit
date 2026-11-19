@@ -427,13 +427,17 @@ Add-Tool $bside 'Remove ticked apps' 'Uninstall for your account' {
 } -Primary | Out-Null
 Add-Tool $bside 'Refresh' 'Re-check installed apps' { Update-BloatList } | Out-Null
 
-Add-Section $f 'Startup apps (ticked = starts with Windows)'
-$startList = New-DarkList $f @(@('Name', 190), @('Where', 180), @('RAM now', 70), @('Command', 430)) 880 220 $true
+Add-Section $f 'Startup apps (ticked = starts with Windows; impact is an estimate from RAM, CPU and slow-startup events)'
+$startList = New-DarkList $f @(@('Name', 180), @('Impact', 90), @('Where', 170), @('RAM now', 70), @('Command', 360)) 880 220 $true
+$startList.ShowItemToolTips = $true
 function Update-StartList {
     $startList.BeginUpdate(); $startList.Items.Clear()
-    foreach ($s in Get-StartupItems | Sort-Object Source, Name) {
+    $rank = @{ High = 0; Medium = 1; Low = 2; 'Not running' = 3; Off = 4 }
+    foreach ($s in @(Add-StartupImpact @(Get-StartupItems)) | Sort-Object { $rank["$($_.Impact)"] }, Source, Name) {
         $it = New-Object System.Windows.Forms.ListViewItem($s.Name)
-        [void]$it.SubItems.Add($s.Source); [void]$it.SubItems.Add($(if ($s.MB) { "$($s.MB) MB" } else { '' })); [void]$it.SubItems.Add($s.Command)
+        [void]$it.SubItems.Add("$($s.Impact)"); [void]$it.SubItems.Add($s.Source); [void]$it.SubItems.Add($(if ($s.MB) { "$($s.MB) MB" } else { '' })); [void]$it.SubItems.Add($s.Command)
+        $it.UseItemStyleForSubItems = $false; $it.SubItems[1].ForeColor = $(switch ($s.Impact) { 'High' { $C.Bad } 'Medium' { $C.Warn } 'Low' { $C.Good } default { $C.Muted } })
+        $it.ToolTipText = "Impact (estimate): $($s.Impact)$(if ($s.ImpactWhy) { " - $($s.ImpactWhy)" })`n$($s.Command)"
         $it.Tag = $s; $it.Checked = [bool]$s.Enabled
         [void]$startList.Items.Add($it)
     }

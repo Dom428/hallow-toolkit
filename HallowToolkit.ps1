@@ -482,6 +482,20 @@ Add-Tool $f 'Tick all / none' 'Toggle every app in the list' {
     $all = @($appUpList.Items | Where-Object { -not $_.Checked }).Count -gt 0
     foreach ($i in $appUpList.Items) { $i.Checked = $all }
 } | Out-Null
+# v5.11: per-app Update and Ignore (like UniGetUI). Ignored updates are hidden until you show them again.
+function Get-IgnoredUpdates { @((Get-Settings).IgnoredUpdates | Where-Object { $_ }) }
+function Get-SelectedAppUpdate { if ($appUpList.SelectedItems.Count -and $appUpList.SelectedItems[0].Tag) { $appUpList.SelectedItems[0].Tag } else { Log 'Click an app in the list first.'; $null } }
+Add-Tool $f 'Update this app' 'Just the one you clicked' { $a = Get-SelectedAppUpdate; if ($a) { Install-AppUpdates @($a) } } -Icon 'download' | Out-Null
+Add-Tool $f 'Ignore / un-ignore' 'Hide this update (or bring it back)' {
+    $a = Get-SelectedAppUpdate; if (-not $a) { return }
+    $ign = @(Get-IgnoredUpdates)
+    $s = Get-Settings
+    if ($ign -contains $a.Id) { $s | Add-Member IgnoredUpdates @($ign | Where-Object { $_ -ne $a.Id }) -Force; Log "$($a.Name) updates are shown again." }
+    else { $s | Add-Member IgnoredUpdates @($ign + $a.Id) -Force; Log "$($a.Name) updates are ignored - Show ignored brings them back." }
+    Save-Settings $s; Start-AppUpdateCheck -Quiet
+} -Icon 'eye-slash' | Out-Null
+$script:ShowIgnored = $false
+Add-Tool $f 'Show ignored' 'List ignored updates too' { $script:ShowIgnored = -not $script:ShowIgnored; Start-AppUpdateCheck -Quiet } -State { $script:ShowIgnored } -Icon 'list' | Out-Null
 $appUpList = New-DarkList $f @(@('App', 300), @('Id', 250), @('Installed', 150), @('New version', 150)) 860 150 $true
 $f.SetFlowBreak($appUpList, $true)
 $script:AppQuiet = $false
@@ -491,20 +505,23 @@ function Start-AppUpdateCheck([switch]$Quiet) {
         param($out)
         $first = @($out)[0]
         if ($first -and $first.Error) { if (-not $script:AppQuiet) { Log $first.Error }; return }
-        $n = 0
+        $n = 0; $ign = @(Get-IgnoredUpdates); $names = @()
         foreach ($a in $out) {
             if (-not $a.Id) { continue }
-            $li = New-Object System.Windows.Forms.ListViewItem("$($a.Name)")
+            $ignored = $ign -contains $a.Id
+            if ($ignored -and -not $script:ShowIgnored) { continue }
+            $li = New-Object System.Windows.Forms.ListViewItem("$($a.Name)$(if ($ignored) { '  (ignored)' })")
             foreach ($v in $a.Id, $a.Version, $a.Available) { [void]$li.SubItems.Add("$v") }
-            $li.Tag = $a; $li.Checked = $true; $li.ForeColor = $C.Accent
-            [void]$appUpList.Items.Add($li); $n++
+            $li.Tag = $a; $li.Checked = -not $ignored; $li.ForeColor = $(if ($ignored) { $C.Muted } else { $C.Accent })
+            [void]$appUpList.Items.Add($li)
+            if (-not $ignored) { $n++; $names += $a.Name }
         }
-        if ($n) { Log "$n app update(s) available - Tune-up tab > App updates: $(@($out | Where-Object Id | ForEach-Object Name) -join ', ')" }
+        if ($n) { Log "$n app update(s) available - Tune-up tab > App updates: $($names -join ', ')" }
         elseif (-not $script:AppQuiet) { Log 'All your apps are up to date.' }
     }
 }
-function Install-AppUpdates {
-    $items = @($appUpList.CheckedItems | ForEach-Object { $_.Tag })
+function Install-AppUpdates($Only) {
+    $items = $(if ($Only) { @($Only) } else { @($appUpList.CheckedItems | ForEach-Object { $_.Tag }) })
     if (-not $items) { Log 'Tick at least one app first (or click Check app updates).'; return }
     $list = ($items | ForEach-Object { "  - $($_.Name)  $($_.Version) > $($_.Available)" }) -join "`n"
     if (-not (Confirm-Action "Update these apps?`n`n$list`n`nClose them first if they are open. Some installers show a UAC prompt - click Yes on it.")) { return }
