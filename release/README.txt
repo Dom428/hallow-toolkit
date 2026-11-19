@@ -9,6 +9,17 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.12
+- New System tab: CPU, graphics (memory, driver, screen), every RAM stick with its speed, the
+  motherboard and BIOS, Windows build, and each drive's health (temperature, wear and errors when
+  the toolkit runs as admin). Copy all puts it on the clipboard.
+- Tweaks > Minimal / Gamer / Privacy presets: they switch on a set of the switches on the page so
+  you can see exactly what changes - nothing happens until you click Apply changes, and Undo all
+  puts every switch back to the Windows default.
+- Tweaks > Browser clean-up: cache and/or history for Chrome, Edge, Brave, Vivaldi, Opera and
+  Firefox (cache only), with a Preview. Open browsers are skipped; cookies, passwords and
+  bookmarks are never touched.
+
 WHAT'S NEW IN 5.11
 - Tune-up > App updates (like UniGetUI): Update this app updates just the one you clicked, and
   Ignore hides an update you don't want (Show ignored brings it back). Nothing updates until you

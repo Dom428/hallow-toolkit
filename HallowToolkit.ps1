@@ -274,12 +274,12 @@ function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
         $nb.ImageAlign = 'MiddleLeft'; $nb.TextImageRelation = 'ImageBeforeText'
         $nb.Padding = New-Object System.Windows.Forms.Padding(20, 0, 0, 0)
     }
-    $nb.Size = New-Object System.Drawing.Size(220, 34); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
+    $nb.Size = New-Object System.Drawing.Size(220, 33); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
     $nb.Cursor = [System.Windows.Forms.Cursors]::Hand
     $nb.Add_Paint($script:NavPaint)
     $nb.Add_Click({ Show-Page $this.Tag; foreach ($x in $navButtons) { $x.Invalidate() } })
     $nav.Controls.Add($nb); $navButtons.Add($nb)
-    $script:navY += 36
+    $script:navY += 35
     return $flow
 }
 
@@ -1136,6 +1136,7 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 . (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowAppsPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowFamilyPage.ps1')
+. (Join-Path $PSScriptRoot 'HallowSysInfoPage.ps1')   # v5.12: System page, Tweaks presets, browser clean-up
 . (Join-Path $PSScriptRoot 'HallowGameExtrasPage.ps1')
 
 # ================================================================ PAGE: TOOLS

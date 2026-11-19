@@ -33,16 +33,12 @@
 | **5.9** | Pre-game check (Gaming tab and tray); scheduled clean-up with reports (opt-in) |
 | **5.10** | Per-game rules: priority, CPU cores and power plan while a game runs |
 | **5.11** | App updates with per-app Update and Ignore; startup impact |
+| **5.12** | System info page; Minimal / Gamer / Privacy tweak presets; browser cache and history clean-up |
 
 ## Next
 
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.12 - System info, debloat presets, browser clean-up
-- System info page: CPU, GPU, RAM sticks and speed, motherboard, BIOS, drives with SMART health where Windows can read it
-- Tweaks presets in WinUtil style (Minimal / Gamer / Privacy): they only flip listed switches, Apply and Undo all work as before
-- Browser clean-up per browser (cache, history), opt-in, only while that browser is closed, with a preview
 
 ### Gaps vs CCleaner / Revo / Process Lasso
 What those tools (and Ninite / UniGetUI, WinUtil, HWiNFO) do that the toolkit didn't, as of 5.9:

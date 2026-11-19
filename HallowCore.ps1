@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '5.11'
+$AppVersion = '5.12'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -1227,6 +1227,7 @@ function Remove-LeftoverItems($Items) {
 . (Join-Path $HallowRoot 'HallowFamily.ps1')
 . (Join-Path $HallowRoot 'HallowPreGame.ps1')
 . (Join-Path $HallowRoot 'HallowGameRules.ps1')
+. (Join-Path $HallowRoot 'HallowSysInfo.ps1')
 . (Join-Path $HallowRoot 'HallowDiag.ps1')
 . (Join-Path $HallowRoot 'HallowServer.ps1')
 . (Join-Path $HallowRoot 'HallowIcons.ps1')
