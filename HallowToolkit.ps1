@@ -18,6 +18,8 @@ param(
 $ErrorActionPreference = 'Continue'
 $script:LogBox = $null
 . (Join-Path $PSScriptRoot 'HallowCore.ps1')
+# v5.8: any error nothing else caught is written to the crashes folder (the toolkit carries on as before)
+trap { Write-HallowCrash $_ | Out-Null; continue }
 
 if ($Mode -eq 'Gui' -and -not $IsAdmin -and -not $env:HALLOW_NO_ELEVATE) {
     try {
@@ -39,6 +41,29 @@ if ($Mode -eq 'Backup') { & $SaveBackupWork (Get-DefaultBackupDir) 5 $false | Fo
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+try { [System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Windows.Forms.UnhandledExceptionMode]::CatchException) } catch { }
+[System.Windows.Forms.Application]::add_ThreadException({ param($s, $e) Write-HallowCrash $e.Exception | Out-Null; Log "ERROR: $($e.Exception.Message)" })
+# v5.8: "Hallow Toolkit closed unexpectedly last time" - once per crash report
+function Show-CrashNotice {
+    $f = Get-NewCrashReport; if (-not $f) { return }
+    $s = Get-Settings; $s | Add-Member LastCrashShown $f.Name -Force; Save-Settings $s
+    $d = New-Object System.Windows.Forms.Form
+    $d.Text = $AppName; $d.FormBorderStyle = 'FixedDialog'; $d.MaximizeBox = $false; $d.MinimizeBox = $false; $d.StartPosition = 'CenterParent'
+    $d.ClientSize = New-Object System.Drawing.Size(440, 150); $d.BackColor = $C.Panel; $d.ForeColor = $C.Text; $d.Font = New-Font 9.5
+    $l = New-Object System.Windows.Forms.Label
+    $l.Text = "Hallow Toolkit closed unexpectedly last time ($($f.LastWriteTime.ToString('ddd h:mm tt'))).`n`nA crash report is kept on this PC only - nothing is sent anywhere."
+    $l.Location = New-Object System.Drawing.Point(18, 16); $l.Size = New-Object System.Drawing.Size(404, 70); $d.Controls.Add($l)
+    $x = 18
+    foreach ($b in @(@('Show details', { Start-Process notepad.exe "`"$($f.FullName)`"" }), @('Open folder', { Start-Process explorer.exe "`"$CrashDir`"" }), @('OK', $null))) {
+        $btn = New-Object System.Windows.Forms.Button
+        $btn.Text = $b[0]; $btn.FlatStyle = 'Flat'; $btn.BackColor = $(if ($b[0] -eq 'OK') { $C.Accent } else { $C.PanelHi }); $btn.ForeColor = $(if ($b[0] -eq 'OK') { $C.AccentText } else { $C.Text })
+        $btn.Size = New-Object System.Drawing.Size(128, 34); $btn.Location = New-Object System.Drawing.Point($x, 100); $x += 140
+        $btn.Tag = $b[1]; $btn.Add_Click({ if ($this.Tag) { & $this.Tag }; $this.FindForm().Close() })
+        $d.Controls.Add($btn); if ($b[0] -eq 'OK') { $d.AcceptButton = $btn }
+    }
+    try { Set-DarkChrome $d } catch { }
+    [void]$d.ShowDialog($form); $d.Dispose()
+}
 
 function RGB($r, $g, $b) { [System.Drawing.Color]::FromArgb($r, $g, $b) }
 # ---- themes (Tools tab > Theme; saved in settings.json). Accent = buttons/highlights, Second = section headers.
@@ -58,10 +83,20 @@ $ThemeBases = [ordered]@{
 }
 $ts = Get-Settings
 $ta = $ThemeAccents["$($ts.Theme)"]; if (-not $ta) { $ta = $ThemeAccents['Orange'] }
+# v5.8: theme "Hallow accent" = the colour picked on the Hallow tab for all the Hallow apps (theme.json); text on it stays readable
+$accentText = RGB 20 12 4
+if ("$($ts.Theme)" -eq 'Shared') {
+    $sh = Get-HallowAccentHex
+    if ($sh) {
+        $sc = ConvertFrom-HexColor $sh
+        $ta = @{ Accent = $sc; Hover = (RGB ([math]::Min(255, $sc.R + 30)) ([math]::Min(255, $sc.G + 30)) ([math]::Min(255, $sc.B + 30))); Second = RGB 160 110 255 }
+        if ((0.299 * $sc.R + 0.587 * $sc.G + 0.114 * $sc.B) -lt 140) { $accentText = RGB 255 255 255 }
+    }
+}
 $tb = $ThemeBases["$($ts.ThemeBase)"]; if (-not $tb) { $tb = $ThemeBases['Hallow'] }
 $C = @{
     Bg = $tb.Bg; Nav = $tb.Nav; Panel = $tb.Panel; PanelHi = $tb.PanelHi; Grid = $tb.Grid
-    Accent = $ta.Accent; AccentHover = $ta.Hover; AccentText = RGB 20 12 4; Purple = $ta.Second
+    Accent = $ta.Accent; AccentHover = $ta.Hover; AccentText = $accentText; Purple = $ta.Second
     Text = RGB 236 232 244; Muted = $tb.Muted; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
 }
 function New-Font([float]$Size, [string]$Style = 'Regular', [string]$Family = 'Segoe UI') { New-Object System.Drawing.Font($Family, $Size, [System.Drawing.FontStyle]$Style) }
@@ -1108,18 +1143,21 @@ function Add-Swatch($Flow, [string]$Text, $Back, $Fore, $Border, [bool]$On, [scr
     $b.Tag = $Click; $b.Add_Click({ & $this.Tag })
     $Flow.Controls.Add($b); if ($Break) { $Flow.SetFlowBreak($b, $true) }
 }
-$curAccent = $(if ($ThemeAccents.Contains("$($ts.Theme)")) { "$($ts.Theme)" } else { 'Orange' })
+$curAccent = $(if ($ThemeAccents.Contains("$($ts.Theme)") -or "$($ts.Theme)" -eq 'Shared') { "$($ts.Theme)" } else { 'Orange' })
 $curBase = $(if ($ThemeBases.Contains("$($ts.ThemeBase)")) { "$($ts.ThemeBase)" } else { 'Hallow' })
 $keys = @($ThemeAccents.Keys)
 foreach ($k in $keys) {
-    Add-Swatch $f $k $ThemeAccents[$k].Accent $C.AccentText $C.Text ($k -eq $curAccent) ([scriptblock]::Create("Set-Theme 'Theme' '$k'")) ($k -eq $keys[-1])
+    Add-Swatch $f $k $ThemeAccents[$k].Accent (RGB 20 12 4) $C.Text ($k -eq $curAccent) ([scriptblock]::Create("Set-Theme 'Theme' '$k'")) $false
 }
+$shHex = Get-HallowAccentHex
+$shCol = $(if ($shHex) { ConvertFrom-HexColor $shHex } else { $ThemeAccents['Orange'].Accent })
+Add-Swatch $f 'Hallow accent' $shCol $(if ((0.299 * $shCol.R + 0.587 * $shCol.G + 0.114 * $shCol.B) -lt 140) { RGB 255 255 255 } else { RGB 20 12 4 }) $C.Text ('Shared' -eq $curAccent) { if (-not (Get-HallowAccentHex)) { Log 'Pick a Hallow accent on the Hallow tab first.'; return }; Set-Theme 'Theme' 'Shared' } $true
 $keys = @($ThemeBases.Keys)
 foreach ($k in $keys) {
     $label = @{ 'Hallow' = 'Hallow dark'; 'Graphite' = 'Graphite'; 'Navy' = 'Navy'; 'OLED' = 'OLED black' }[$k]
     Add-Swatch $f $label $ThemeBases[$k].Bg $C.Text $(if ($k -eq $curBase) { $C.Accent } else { $ThemeBases[$k].PanelHi }) ($k -eq $curBase) ([scriptblock]::Create("Set-Theme 'ThemeBase' '$k'")) ($k -eq $keys[-1])
 }
-Add-Note $f 'Top row: accent colour for buttons, icons and highlights. Bottom row: background. Your pick is kept across updates and goes along with Share your setup.' | Out-Null
+(Add-Note $f 'Top row: accent colour for buttons, icons and highlights (Hallow accent = the colour shared by all Hallow apps, picked on the Hallow tab). Bottom row: background. Your pick is kept across updates and goes along with Share your setup.').Height = 36
 
 Add-Section $f 'Toolkit updates'
 Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
@@ -1198,6 +1236,7 @@ $form.Add_Shown({
     Show-Page $StartPage
     Log "$AppName v$AppVersion ready. Start with Quick Clean-up, or explore the tabs on the left."
     [void]$script:AfterShown.Insert(0, { Update-AppList })
+    [void]$script:AfterShown.Add({ Show-CrashNotice })
     $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
     $t.Add_Tick({
         $this.Stop()
@@ -1225,4 +1264,4 @@ if ($env:HALLOW_SNAP) {
     }
     $form.Close(); return
 }
-[void]$form.ShowDialog()
+try { [void]$form.ShowDialog() } catch { Write-HallowCrash $_ | Out-Null; throw }

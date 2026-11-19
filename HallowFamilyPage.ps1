@@ -65,6 +65,45 @@ foreach ($app in $FamilyApps) {
 }
 $f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
 
+# ---- v5.8: one accent colour for every Hallow app (theme.json)
+Add-Section $f 'Hallow accent - one colour for all the Hallow apps' 'star'
+$accentNote = Add-Note $f ''
+$accentNote.Height = 36
+$script:AccentButtons = @()
+function Update-AccentPicker {
+    $cur = Get-HallowAccentHex
+    $accentNote.Text = $(if ($cur) { "Hallow accent: $cur. Apps with ""Use the Hallow accent"" on (the default) switch to it straight away. The toolkit uses it when Tools > Theme is set to Hallow accent." }
+        else { 'Not set - each app uses its own colour. Pick one and every Hallow app with "Use the Hallow accent" on (the default) switches to it straight away.' })
+    foreach ($b in $script:AccentButtons) { $on = ("$($b.Tag)" -eq $cur); $b.FlatAppearance.BorderSize = $(if ($on) { 3 } else { 1 }); $b.Text = $(if ($on) { "$($b.AccessibleName)  (on)" } else { $b.AccessibleName }) }
+}
+function Set-AccentFromPicker([string]$Hex) {
+    try { Set-HallowAccent $Hex } catch { Log "Could not save the Hallow accent: $($_.Exception.Message)"; return }
+    Update-AccentPicker
+    Log ("Hallow accent set to {0} - the Hallow apps pick it up now.{1}" -f $Hex, $(if ("$((Get-Settings).Theme)" -eq 'Shared') { ' The toolkit shows it next time it opens (or pick it again in Tools > Theme).' } else { ' To use it in the toolkit too: Tools > Theme > Hallow accent.' }))
+}
+foreach ($k in @($HallowAccents.Keys) + 'Custom...') {
+    $b = New-Object System.Windows.Forms.Button
+    $b.UseMnemonic = $false; $b.FlatStyle = 'Flat'; $b.Size = New-Object System.Drawing.Size(88, 36); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 6, 8)
+    $b.Font = New-Font 9; $b.Cursor = [System.Windows.Forms.Cursors]::Hand; $b.AccessibleName = $k
+    if ($k -eq 'Custom...') {
+        $b.Text = $k; $b.BackColor = $C.Panel; $b.ForeColor = $C.Text; $b.FlatAppearance.BorderColor = $C.Grid
+        $b.Add_Click({
+            $cd = New-Object System.Windows.Forms.ColorDialog; $cd.FullOpen = $true
+            $cur = Get-HallowAccentHex; if ($cur) { $cd.Color = ConvertFrom-HexColor $cur }
+            if ($cd.ShowDialog($form) -eq 'OK') { Set-AccentFromPicker ('#{0:X2}{1:X2}{2:X2}' -f $cd.Color.R, $cd.Color.G, $cd.Color.B) }
+        })
+    } else {
+        $hex = $HallowAccents[$k]; $col = ConvertFrom-HexColor $hex
+        $b.Text = $k; $b.Tag = $hex; $b.BackColor = $col; $b.FlatAppearance.MouseOverBackColor = $col; $b.FlatAppearance.BorderColor = $C.Text
+        $b.ForeColor = $(if ((0.299 * $col.R + 0.587 * $col.G + 0.114 * $col.B) -lt 140) { [System.Drawing.Color]::White } else { RGB 20 12 4 })
+        $b.Add_Click({ Set-AccentFromPicker "$($this.Tag)" })
+        $script:AccentButtons += $b
+    }
+    $f.Controls.Add($b)
+}
+$f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
+Update-AccentPicker
+
 # ---- v5.7: Check links - is each app running, answering the others, starting with Windows...
 Add-Section $f 'Links between the apps' 'link'
 (Add-Note $f 'Green = fine, amber = worth a look, red = something is broken. The tray app also checks once a day and pops up only when something is red (if Tray alerts on the Server tab is on).').Height = 36
@@ -75,7 +114,7 @@ $linkRows.Text = 'Link results'   # not shown (lets snapshots scroll here)
 $linkRows.FlowDirection = 'TopDown'; $linkRows.WrapContents = $false; $linkRows.AutoSize = $true; $linkRows.AutoSizeMode = 'GrowAndShrink'
 $linkRows.MinimumSize = New-Object System.Drawing.Size(860, 0); $linkRows.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
 $f.Controls.Add($linkRows); $f.SetFlowBreak($linkRows, $true)
-$FixTitles = @{ start = 'Start it'; autostart = 'Turn on Start with Windows'; open = 'Open settings' }
+$FixTitles = @{ start = 'Start it'; autostart = 'Turn on Start with Windows'; open = 'Open settings'; crash = 'Show' }
 function Show-LinkResults($Lines) {
     foreach ($oldRow in @($linkRows.Controls)) { foreach ($b in @($oldRow.Controls | Where-Object { $_ -is [System.Windows.Forms.Button] })) { [void]$allButtons.Remove($b) }; $oldRow.Dispose() }
     $linkRows.Controls.Clear()
@@ -93,14 +132,14 @@ function Show-LinkResults($Lines) {
         $t.TextAlign = 'MiddleLeft'; $t.Font = New-Font 9.5; $t.ForeColor = $(if ($l.Level -eq 'good') { $C.Text } else { $col })
         $t.Text = "Hallow $($l.App) - $($l.Text)"; $row.Controls.Add($t)
         if ($l.Fix -and $FixTitles[$l.Fix]) {
-            $b = Add-Tool $row $FixTitles[$l.Fix] '' ([scriptblock]::Create("Log (Invoke-FamilyFix '$($l.App)' '$($l.Fix)'); Start-LinkCheck")) -Width 270 -Icon $(switch ($l.Fix) { 'start' { 'play' } 'autostart' { 'power-off' } default { 'gear' } })
+            $b = Add-Tool $row $FixTitles[$l.Fix] '' ([scriptblock]::Create("Log (Invoke-FamilyFix '$($l.App)' '$($l.Fix)'); Start-LinkCheck")) -Width 270 -Icon $(switch ($l.Fix) { 'start' { 'play' } 'autostart' { 'power-off' } 'crash' { 'file-lines' } default { 'gear' } })
             $b.Size = New-Object System.Drawing.Size(270, 34); $b.Location = New-Object System.Drawing.Point(586, 2)
         }
         $linkRows.Controls.Add($row)
     }
 }
 function Start-LinkCheck {
-    Start-Background 'Check links' $FamilyLinkCheckWork @([string[]]@($FamilyApps | ForEach-Object Name), $null) {
+    Start-Background 'Check links' $FamilyLinkCheckWork @([string[]]@($FamilyApps | ForEach-Object Name), @{ ToolkitCrashDir = $CrashDir }) {
         param($o)
         $lines = @($o | Where-Object { $_.Level })
         Show-LinkResults $lines
@@ -178,4 +217,4 @@ $famTimer.Add_Tick({
 })
 $famTimer.Start()
 $form.Add_FormClosing({ $famTimer.Stop() })
-$script:PageShowHooks['Hallow'] = { Update-FamilyCards; Start-FamilyUpdateCheck; if ($env:HALLOW_SNAP) { Show-LinkResults (& $FamilyLinkCheckWork ([string[]]@($FamilyApps | ForEach-Object Name)) $null) } elseif ($StartPage -eq 'Hallow') { Start-LinkCheck } }   # opened from the tray's link alert: check straight away
+$script:PageShowHooks['Hallow'] = { Update-FamilyCards; Start-FamilyUpdateCheck; if ($env:HALLOW_SNAP) { Show-LinkResults (& $FamilyLinkCheckWork ([string[]]@($FamilyApps | ForEach-Object Name)) @{ ToolkitCrashDir = $CrashDir }) } elseif ($StartPage -eq 'Hallow') { Start-LinkCheck } }   # opened from the tray's link alert: check straight away

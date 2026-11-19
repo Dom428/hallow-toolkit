@@ -29,15 +29,12 @@
 | **5.5** | Hallow tab: install, open and update every Hallow app; save backups hand over to Hallow Vault |
 | **5.6** | Phone dashboard points to Hallow Remote; Discord posts for saved Hallow Clips clips (opt-in) |
 | **5.7** | Check links: is every Hallow app running and linked, with one-click fixes; daily tray check |
+| **5.8** | One Hallow accent colour for all the apps; crash reports kept on this PC, crashes in Check links |
 
 ## Next
 
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.8 - Hallow accent and crash reports
-- Hallow tab: pick one accent colour for all the Hallow apps (8 swatches or your own); the toolkit can use it too
-- Crash reports kept on this PC, with a notice on the next start; Check links shows apps that crashed this week
 
 ### 5.9 - Pre-game check and scheduled clean-up
 - Pre-game check (Gaming tab and tray): restart-pending updates, app updates, RAM, game drive space, GPU / CPU, apps that hurt games, NVIDIA driver age, Hallow apps running - with fixes

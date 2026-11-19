@@ -8,6 +8,7 @@ param([switch]$Once)   # -Once: run one detection pass and print what it sees (f
 $ErrorActionPreference = 'Continue'
 $script:LogBox = $null
 . (Join-Path $PSScriptRoot 'HallowCore.ps1')
+trap { Write-HallowCrash $_ 'Hallow Toolkit tray' | Out-Null; continue }   # v5.8: crash reports
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
 $IgnoreFolders = @('wallpaper_engine', 'Steamworks Shared', 'Steam Controller Configs', 'SteamVR', 'Steam Linux Runtime')
@@ -190,7 +191,7 @@ function Start-TrayLinkCheck {
     if ("$($s.LastLinkCheck)" -eq $today) { return }
     if (-not @($FamilyApps | Where-Object { Test-FamilyInstalled $_.Name }).Count) { return }
     $s | Add-Member LastLinkCheck $today -Force; Save-Settings $s
-    $ps = [powershell]::Create(); [void]$ps.AddScript($FamilyLinkCheckWork.ToString()).AddArgument([string[]]@($FamilyApps | ForEach-Object Name)).AddArgument($null)
+    $ps = [powershell]::Create(); [void]$ps.AddScript($FamilyLinkCheckWork.ToString()).AddArgument([string[]]@($FamilyApps | ForEach-Object Name)).AddArgument(@{ ToolkitCrashDir = $CrashDir })
     $script:LinkJob = @{ PS = $ps; H = $ps.BeginInvoke() }
 }
 function Complete-TrayLinkCheck {
@@ -378,5 +379,5 @@ $timer.Add_Tick({
 $timer.Start()
 
 Log '[tray] Hallow tray app started.'
-[System.Windows.Forms.Application]::Run()
+try { [System.Windows.Forms.Application]::Run() } catch { Write-HallowCrash $_ 'Hallow Toolkit tray' | Out-Null; throw }
 $mutex.ReleaseMutex()

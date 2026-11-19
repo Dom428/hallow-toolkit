@@ -9,6 +9,16 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.8
+- Hallow tab > Hallow accent: pick one accent colour for all the Hallow apps (8 colours or your
+  own). Apps with "Use the Hallow accent" on switch to it straight away. To use it in the toolkit
+  too, pick Tools > Theme > Hallow accent (your current theme stays until you do).
+- Crash reports: if the toolkit or its tray app runs into an error nothing else caught, a report
+  goes to the crashes folder next to the toolkit (no settings, keys or links in it; newest 20
+  kept; nothing is sent anywhere). The next start tells you, with Show details and Open folder.
+- Check links: amber "Crashed <when>" with Show for any Hallow app (or the toolkit) that crashed
+  in the last 7 days. Older app versions that don't report crashes are simply skipped.
+
 WHAT'S NEW IN 5.7
 - Hallow tab > Check links: one green, amber or red line per check for each Hallow app - running,
   answering the other apps (and running the version that's installed), status file fresh, starts

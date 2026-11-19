@@ -149,6 +149,16 @@ $FamilyLinkCheckWork = {
         } catch { $null } finally { try { $pc.Dispose() } catch { } }
     }
     function Is-Running([string]$App) { if ($Opt.Running) { return @($Opt.Running) -contains $App }; [bool](Get-Process "Hallow$App" -ErrorAction SilentlyContinue) }
+    # v5.8: "lastCrash" (ISO) in an app's status - amber with Show when it's under 7 days old
+    function Test-Crash([string]$App, $Status) {
+        if (-not $Status -or $Status.PSObject.Properties.Name -notcontains 'lastCrash' -or -not $Status.lastCrash) { return }
+        try { $lc = [datetime]::Parse("$($Status.lastCrash)") } catch { return }
+        if (((Get-Date) - $lc).TotalDays -lt 7) { Add-Line $App 'Crash' 'warn' ("Crashed {0:ddd d MMM h:mm tt}" -f $lc) 'crash' }
+    }
+    if ($Opt.ToolkitCrashDir -and (Test-Path $Opt.ToolkitCrashDir)) {
+        $tc = Get-ChildItem $Opt.ToolkitCrashDir -Filter '*.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($tc) { Test-Crash 'Toolkit' ([pscustomobject]@{ lastCrash = $tc.LastWriteTime.ToString('s') }) }
+    }
     $installed = @{}
     foreach ($a in $Apps) {
         $exe = Join-Path $local "Programs\Hallow $a\Hallow$a.exe"
@@ -162,6 +172,11 @@ $FamilyLinkCheckWork = {
         if (-not $rv) { Add-Line $a 'Start with Windows' 'warn' "Doesn't start with Windows" 'autostart' }
         elseif ("$rv" -notlike "*$exe*") { Add-Line $a 'Start with Windows' 'warn' 'Starts with Windows from an old location' 'autostart' }
         else { Add-Line $a 'Start with Windows' 'good' 'Starts with Windows' $null }
+        $sf = if ($a -eq 'Clips') { Join-Path $local 'HallowClips\status.json' } else { Join-Path $roam "Hallow$a\status.json" }
+        $sj = $null
+        if ($run -and (Test-Pipe $a)) { $r2 = Send-Pipe $a 'status'; if ($r2 -like 'ok*') { try { $sj = ($r2 -replace '^ok\s*', '') | ConvertFrom-Json } catch { } } }
+        if (-not $sj -and (Test-Path $sf)) { try { $sj = Get-Content $sf -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json } catch { } }
+        Test-Crash $a $sj
         if (-not $run) { continue }
         # the family pipe
         if (-not (Test-Pipe $a)) { Add-Line $a 'Link' 'warn' 'No link to the other Hallow apps - this version is too old, update it' $null }
@@ -176,7 +191,6 @@ $FamilyLinkCheckWork = {
             } else { Add-Line $a 'Link' 'warn' "Its link gave an odd answer - update it" $null }
         }
         # status.json: written when something changes and at least on start
-        $sf = if ($a -eq 'Clips') { Join-Path $local 'HallowClips\status.json' } else { Join-Path $roam "Hallow$a\status.json" }
         if (Test-Path $sf) {
             $t = (Get-Item $sf).LastWriteTime
             try { $u = [datetime]::Parse("$((Get-Content $sf -Raw -Encoding UTF8 | ConvertFrom-Json).updated)"); if ($u -gt $t) { $t = $u } } catch { }
@@ -223,6 +237,12 @@ $FamilyLinkCheckWork = {
 }
 # Fixes for a check line, run as you: start the app, or turn on its own Start with Windows value.
 function Invoke-FamilyFix([string]$App, [string]$Fix) {
+    if ($Fix -eq 'crash') {   # open the newest crash report in Notepad
+        $dir = if ($App -eq 'Toolkit') { $CrashDir } elseif ($App -eq 'Clips') { Join-Path $env:LOCALAPPDATA 'HallowClips\crashes' } else { Join-Path $env:APPDATA "Hallow$App\crashes" }
+        $f = Get-ChildItem $dir -Filter '*.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if (-not $f) { return "No crash report found for Hallow $App." }
+        Start-Process notepad.exe "`"$($f.FullName)`""; return "Opened the newest Hallow $App crash report (kept on this PC only)."
+    }
     $exe = Get-FamilyExe $App
     if (-not (Test-Path $exe)) { return "Hallow $App is not installed." }
     switch ($Fix) {
@@ -233,4 +253,58 @@ function Invoke-FamilyFix([string]$App, [string]$Fix) {
             "Hallow $App now starts with Windows (in the tray), the same as its own Settings switch."
         }
     }
+}
+
+# ================================================================ SHARED ACCENT (v5.8)
+# %APPDATA%\Hallow\theme.json = {"accent":"#RRGGBB","updated":"..."} - every Hallow app with "Use the Hallow accent" on
+# takes its accent colour from it. Written atomically. HALLOW_THEME_FILE points somewhere else (tests only).
+$HallowThemeFile = $(if ($env:HALLOW_THEME_FILE) { $env:HALLOW_THEME_FILE } else { Join-Path $env:APPDATA 'Hallow\theme.json' })
+$HallowAccents = [ordered]@{ 'Orange' = '#F07820'; 'Purple' = '#8B5CF6'; 'Blue' = '#3B82F6'; 'Cyan' = '#06B6D4'; 'Green' = '#22C55E'; 'Pink' = '#EC4899'; 'Red' = '#EF4444'; 'Gold' = '#EAB308' }
+function Get-HallowAccentHex {
+    try { $h = "$((Get-Content $HallowThemeFile -Raw -ErrorAction Stop | ConvertFrom-Json).accent)"; if ($h -match '^#[0-9A-Fa-f]{6}$') { return $h.ToUpper() } } catch { }
+    $null
+}
+function ConvertFrom-HexColor([string]$Hex) { [System.Drawing.Color]::FromArgb([Convert]::ToInt32($Hex.Substring(1, 2), 16), [Convert]::ToInt32($Hex.Substring(3, 2), 16), [Convert]::ToInt32($Hex.Substring(5, 2), 16)) }
+function Set-HallowAccent([string]$Hex) {
+    if ($Hex -notmatch '^#[0-9A-Fa-f]{6}$') { throw "Not a colour: $Hex" }
+    New-Item -ItemType Directory -Force (Split-Path $HallowThemeFile) | Out-Null
+    $json = [ordered]@{ accent = $Hex.ToUpper(); updated = (Get-Date).ToString('s') } | ConvertTo-Json -Compress
+    $tmp = "$HallowThemeFile.tmp"
+    [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
+    if (Test-Path $HallowThemeFile) { [IO.File]::Replace($tmp, $HallowThemeFile, [NullString]::Value) } else { [IO.File]::Move($tmp, $HallowThemeFile) }
+}
+
+# ================================================================ CRASH REPORTS (v5.8)
+# <toolkit folder>\crashes\<yyyy-MM-dd HH-mm-ss>.txt: version, Windows, time, the error and where it happened. Never settings,
+# keys, links or file contents (web addresses in messages are blanked). Newest 20 kept. Nothing is sent anywhere.
+$CrashDir = Join-Path $HallowRoot 'crashes'
+function Write-HallowCrash($Err, [string]$Part = 'Hallow Toolkit') {
+    try {
+        New-Item -ItemType Directory -Force $CrashDir | Out-Null
+        $ex = if ($Err -is [System.Management.Automation.ErrorRecord]) { $Err.Exception } else { $Err }
+        $os = [Environment]::OSVersion.VersionString
+        try { $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion' -ErrorAction Stop; $os = "$($cv.ProductName) $($cv.DisplayVersion) (build $($cv.CurrentBuild))" } catch { }
+        $L = New-Object System.Collections.Generic.List[string]
+        $L.Add("App: $Part"); $L.Add("Version: $AppVersion"); $L.Add("Windows: $os"); $L.Add("Time: $((Get-Date).ToString('s'))"); $L.Add('')
+        if ($Err -is [System.Management.Automation.ErrorRecord]) {
+            if ($Err.InvocationInfo) { $L.Add("Where: $(Split-Path -Leaf "$($Err.InvocationInfo.ScriptName)") line $($Err.InvocationInfo.ScriptLineNumber)") }
+            if ($Err.ScriptStackTrace) { $L.Add('Script stack:'); $L.Add("$($Err.ScriptStackTrace)"); $L.Add('') }
+        }
+        $e = $ex; $n = 0
+        while ($e -and $n -lt 6) { $L.Add("$(if ($n) { 'Inner exception' } else { 'Exception' }): $($e.GetType().FullName)"); $L.Add("Message: $($e.Message)"); if ($e.StackTrace) { $L.Add("$($e.StackTrace)") }; $L.Add(''); $e = $e.InnerException; $n++ }
+        $text = ($L -join "`r`n") -replace 'https?://\S+', '(link removed)'
+        $file = Join-Path $CrashDir ((Get-Date -Format 'yyyy-MM-dd HH-mm-ss') + '.txt'); $i = 1
+        while (Test-Path $file) { $file = Join-Path $CrashDir ((Get-Date -Format 'yyyy-MM-dd HH-mm-ss') + "-$i.txt"); $i++ }
+        [IO.File]::WriteAllText($file, $text, (New-Object Text.UTF8Encoding($false)))
+        Get-ChildItem $CrashDir -Filter '*.txt' | Sort-Object LastWriteTime -Descending | Select-Object -Skip 20 | Remove-Item -Force -ErrorAction SilentlyContinue
+        Log "Crash report saved in $CrashDir"
+        $file
+    } catch { }
+}
+# the newest crash report not shown yet (shown once per file)
+function Get-NewCrashReport {
+    $f = Get-ChildItem $CrashDir -Filter '*.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (-not $f) { return $null }
+    if ("$((Get-Settings).LastCrashShown)" -eq $f.Name) { return $null }
+    $f
 }
