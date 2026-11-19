@@ -9,6 +9,17 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.13
+- Gaming > Background restraint (like Process Lasso's ProBalance, off until you turn it on): when
+  a background app keeps using more than 15% of the CPU while a game runs (or at any time, if you
+  pick Always), the tray app lowers it to Below normal priority and puts it back to Normal when it
+  calms down or the game ends. It never touches games, audio and voice apps (Discord, Voicemeeter,
+  Equalizer APO, Hallow Mixer...), Windows, Hallow apps, the app in front or anything running as
+  admin. Add your own never-touch apps; a small log shows what it lowered and when.
+- Gaming > IdleSaver (off until you turn it on): after 5-60 minutes without mouse or keyboard, the
+  tray app switches to the power plan you pick and back the moment you return. Never while a game
+  or game session runs, or while sound has played in the last 5 minutes. No admin needed.
+
 WHAT'S NEW IN 5.12
 - New System tab: CPU, graphics (memory, driver, screen), every RAM stick with its speed, the
   motherboard and BIOS, Windows build, and each drive's health (temperature, wear and errors when

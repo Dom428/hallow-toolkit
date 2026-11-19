@@ -1252,6 +1252,7 @@ foreach ($l in $launchers) {
 . (Join-Path $PSScriptRoot 'HallowMorePage.ps1')   # adds sections to pages built above (incl. Tools)
 . (Join-Path $PSScriptRoot 'HallowPreGamePage.ps1')   # v5.9: pre-game check (Gaming), scheduled clean-up (Tune-up)
 . (Join-Path $PSScriptRoot 'HallowGameRulesPage.ps1')   # v5.10: per-game rules (Gaming)
+. (Join-Path $PSScriptRoot 'HallowBalancePage.ps1')   # v5.13: background restraint, IdleSaver (Gaming)
 
 # ---- go
 $form.Add_Shown({

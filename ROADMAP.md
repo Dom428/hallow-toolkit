@@ -34,6 +34,7 @@
 | **5.10** | Per-game rules: priority, CPU cores and power plan while a game runs |
 | **5.11** | App updates with per-app Update and Ignore; startup impact |
 | **5.12** | System info page; Minimal / Gamer / Privacy tweak presets; browser cache and history clean-up |
+| **5.13** | Background restraint (ProBalance style) and IdleSaver, both opt-in |
 
 ## Next
 
@@ -48,8 +49,8 @@ What those tools (and Ninite / UniGetUI, WinUtil, HWiNFO) do that the toolkit di
 - System summary with RAM sticks, BIOS and drive health (HWiNFO summary) - **buildable**: 5.12
 - Debloat / tweak presets (WinUtil) - **buildable**: 5.12, on top of the existing switches and Undo
 - Browser cache / history / cookies cleaning (CCleaner) - **buildable**: 5.12 for cache and history; cookies left out on purpose (signs you out everywhere)
-- ProBalance - automatically lowering background apps that hog the CPU (Process Lasso) - **buildable later**: needs careful tuning so it never touches games or audio
-- IdleSaver / power plan switch when you're away (Process Lasso) - **buildable later**
+- ProBalance - automatically lowering background apps that hog the CPU (Process Lasso) - **buildable**: 5.13, opt-in background restraint; never games, audio/voice apps, Windows, Hallow apps or the app in front
+- IdleSaver / power plan switch when you're away (Process Lasso) - **buildable**: 5.13, opt-in; never while a game runs or sound is playing
 - Live sensors for every voltage, fan and per-core temperature (HWiNFO) - **not here**: needs a kernel driver; the toolkit shows GPU via nvidia-smi and CPU temp through LibreHardwareMonitor if you install it
 - Raw SMART attributes for every drive (HWiNFO / CrystalDiskInfo) - **partly**: Windows only exposes health, wear, temperature and error counters (shown in 5.12)
 - Install tracing - log everything an installer changes so it can be undone exactly (Revo) - **not here**: needs file-system and registry monitoring while the installer runs; the toolkit's leftover scan covers most of it

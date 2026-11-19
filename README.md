@@ -13,6 +13,7 @@ The toolkit checks this repo for new releases when it opens and asks before it u
 ## Highlights
 - Quick Clean-up, health report, crash detective, RAM/SSD checks
 - Live monitor, game boost, game sessions, save backups, server ping
+- **Per-game rules, background restraint and IdleSaver** (Process Lasso style, opt-in): priority, cores and power plan per game; background apps that hog the CPU lowered while you play (never games, audio/voice apps or Windows); a different power plan while you're away
 - Storage scans, disk map, Revo-style deep uninstall with leftovers scan
 - Tweaks, startup and services manager, dev toolbox
 - **Mic:** quiet in games but fine in Discord? One-click fix for the Windows mic level, default devices, exclusive control and call ducking (understands virtual mics like SteelSeries Sonar), a live meter, and a warning when an app keeps lowering your mic

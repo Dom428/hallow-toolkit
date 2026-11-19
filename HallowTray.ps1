@@ -84,7 +84,7 @@ function Update-SessionItem { $on = [bool](Get-GameSession); $miSession.Checked 
 Update-SessionItem
 $miSession.Add_Click({
     if (Get-GameSession) { Stop-GameSession; Notify 'Game session ended - power plan, updates and apps are back to normal.' }
-    else { Start-GameSession; Notify 'Game session on - Boost apps closed, High performance power. Click again when done.' }
+    else { Stop-IdleSaverNow; Start-GameSession; Notify 'Game session on - Boost apps closed, High performance power. Click again when done.' }
     Update-SessionItem
 })
 [void]$menu.Items.Add($miSession)
@@ -131,7 +131,7 @@ $miStartup.Add_Click({ Set-TrayAtStartup $miStartup.Checked })
 [void]$menu.Items.Add($miStartup)
 [void]$menu.Items.Add('-')
 $miExit = $menu.Items.Add('Exit tray app')
-$miExit.Add_Click({ Restore-RulePower; $timer.Stop(); $dashTimer.Stop(); if ($script:Dash) { try { $script:Dash.Stop() } catch { } }; $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
+$miExit.Add_Click({ Restore-RulePower; Stop-Balance; $timer.Stop(); $dashTimer.Stop(); if ($script:Dash) { try { $script:Dash.Stop() } catch { } }; $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
 if (Test-IconFont) {
     $ic = [System.Drawing.Color]::FromArgb(70, 60, 90)
     foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miPreGame, 'clipboard-check'), @($miAudio, 'volume-high'), @($miTimer, 'moon'), @($miExit, 'power-off'))) {
@@ -305,6 +305,29 @@ function Restore-RulePower {
     try { if ((Get-ActiveSchemeGuid) -eq $rp.Set) { powercfg /setactive $rp.Prev | Out-Null; Log "[tray] Power plan back to $(Get-SchemeName)" } } catch { }
 }
 
+# ---- v5.13 background restraint (ProBalance style) + IdleSaver - both off until turned on on the Gaming tab
+$script:Restraint = New-RestraintState; $script:Idle = New-IdleState; $script:RuleGame = $null
+$m = Restore-IdleLeftover; if ($m) { Log "[tray] $m" }   # the tray stopped while you were away last time
+function Stop-IdleSaverNow { if ($script:Idle.Switched) { $m = Invoke-IdleSaverPass $script:Idle (Get-IdleSaverSettings) $true; if ($m) { Log "[tray] $m" } } }
+function Stop-Balance {
+    $ev = @(Restore-AllRestrained $script:Restraint 'the tray app closed'); Add-RestraintLog $ev
+    if ($script:Idle.Switched) { $sw = $script:Idle.Switched; $script:Idle.Switched = $null; Clear-IdleSwitchedMark; if ((Get-ActiveSchemeGuid) -eq $sw.Set) { [void](Set-PowerPlanChecked $sw.Prev) } }
+}
+function Invoke-BalancePasses($Game) {
+    $gameOn = [bool]$script:InGame -or [bool](Get-GameSession) -or (Test-HubPlaying)
+    $rs = Get-RestraintSettings
+    $active = $rs.On -and ($rs.Always -or $gameOn)
+    if ($active -or $script:Restraint.Restrained.Count) {
+        if (((Get-Date) - $script:Restraint.RootsAt).TotalMinutes -ge 5) { $script:Restraint.Roots = @(Get-GameRoots); $script:Restraint.RootsAt = Get-Date }
+        $fg = [uint32]0; [void][HallowNative]::GetWindowThreadProcessId([HallowNative]::GetForegroundWindow(), [ref]$fg)
+        $ctx = @{ GameRoots = $script:Restraint.Roots; Protect = @(@($(if ($Game) { $Game.Process }), $script:RuleGame) | Where-Object { $_ }); Exclude = $rs.Exclude; Foreground = [int]$fg; Self = @($PID) }
+        $ev = @(Invoke-RestraintPass $script:Restraint $active $rs.Pct $ctx 2 3 $(if ($rs.On) { 'the game ended' } else { 'restraint was turned off' }))
+        if ($ev.Count) { Add-RestraintLog $ev; foreach ($e in $ev) { Log "[tray] Background restraint: $($e.Action.ToLower()) $($e.Name) - $($e.Reason)" } }
+    } else { $script:Restraint.LastTime = $null; $script:Restraint.Hot = @{} }   # nothing to do: start fresh next time
+    $io = Get-IdleSaverSettings
+    if ($io.On -or $script:Idle.Switched) { $m = Invoke-IdleSaverPass $script:Idle $io $gameOn; if ($m) { Log "[tray] $m" } }
+}
+
 # ---- auto game boost loop
 $script:InGame = $null; $script:Closed = @(); $script:Misses = 0; $script:HotWarned = $false
 $timer = New-Object System.Windows.Forms.Timer
@@ -359,6 +382,7 @@ $timer.Add_Tick({
             $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
             $script:DashState.InGame = $g.Name; $script:DashState.GameStart = Get-Date
             $script:SessStart = Get-Date; $script:Samples = New-Object System.Collections.Generic.List[object]
+            Stop-IdleSaverNow   # v5.13: away power plan off before the game's own plan
             # v5.10: this game's rule (priority, cores, power plan)
             $script:Rule = Find-GameRule $g; $script:RuleDone = New-Object 'System.Collections.Generic.HashSet[int]'; $script:RuleGame = $g.Process
             if ($script:Rule) {
@@ -406,6 +430,7 @@ $timer.Add_Tick({
                 $script:Closed = @()
             }
         } elseif ($g) { $script:Misses = 0; if ($script:Rule) { [void](Set-GameRuleProcesses $script:Rule $script:RuleGame $script:RuleDone) } }   # processes the game starts later
+        if ($script:Ticks % 2 -eq 0) { try { Invoke-BalancePasses $g } catch { Log "[tray] restraint / IdleSaver: $($_.Exception.Message)" } }   # v5.13, every 10 s
     } catch { Log "[tray] error: $($_.Exception.Message)" }
 })
 $timer.Start()
