@@ -9,6 +9,15 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.6
+- Phone dashboard: when Hallow Remote is installed, a card at the top points to it - Remote is the
+  main phone app now (mixer, Hub games with covers, game session, PC stats). The dashboard keeps
+  working as before.
+- Server tab > Discord posts > Saved clips (off until you turn it on): when Hallow Clips saves a
+  clip, the tray app posts it to your channel - the video itself if it's under Discord's 10 MB
+  limit, otherwise "<game> - saved a clip". Older clips are never posted, and the webhook link
+  stays on this PC.
+
 WHAT'S NEW IN 5.5
 - New Hallow tab: a card for each Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips) that
   shows whether it's installed and running and whether a newer version is out. Open, Install and

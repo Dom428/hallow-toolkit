@@ -286,6 +286,7 @@ Add-Tool $f 'Sessions' 'Post when you stop playing' { Set-LinkSetting 'DiscordSe
 Add-Tool $f 'Alerts' 'Post when a server goes down' { Set-LinkSetting 'DiscordServer' (-not (Get-LinkSetting 'DiscordServer' $true)) } -Width 210 -State { Get-LinkSetting 'DiscordServer' $true } | Out-Null
 Add-Tool $f 'Listening to' 'Post songs from Music apps' { Set-LinkSetting 'DiscordNowPlaying' (-not (Get-LinkSetting 'DiscordNowPlaying' $false)); if (Get-LinkSetting 'DiscordNowPlaying' $false) { Log 'Listening to: ON. Needs Hallow Mixer running. Songs from apps in its Music channel (Spotify etc.) are posted after 30 s of playing, at most one every 2 minutes. Browser videos are never posted.' } } -Width 210 -State { Get-LinkSetting 'DiscordNowPlaying' $false } | Out-Null
 Add-Tool $f 'Mic status' 'Post when you mute / unmute' { Set-LinkSetting 'DiscordMicStatus' (-not (Get-LinkSetting 'DiscordMicStatus' $false)); if (Get-LinkSetting 'DiscordMicStatus' $false) { Log 'Mic status: ON. Needs Hallow Mixer running. Posts "Mic muted" / "Mic back on" once a change has lasted 10 seconds, at most once a minute.' } } -Width 210 -State { Get-LinkSetting 'DiscordMicStatus' $false } | Out-Null
+Add-Tool $f 'Saved clips' 'Post my saved clips' { Set-LinkSetting 'DiscordClips' (-not (Get-LinkSetting 'DiscordClips' $false)); if (Get-LinkSetting 'DiscordClips' $false) { Log 'Saved clips: ON. When Hallow Clips saves a clip, the tray app posts it to your Discord channel - the video itself if it is under 10 MB (Discord''s limit), otherwise "<game> - saved a clip". Clips saved before now are never posted.' } } -Width 210 -Icon 'film' -State { Get-LinkSetting 'DiscordClips' $false } | Out-Null
 Add-Tool $f 'Disconnect' 'Forget the webhook link' {
     $s = Get-Settings; if ($s.PSObject.Properties.Name -contains 'DiscordWebhook') { $s.PSObject.Properties.Remove('DiscordWebhook'); Save-Settings $s }
     Update-DiscordNote; Log 'Discord disconnected - the link is removed from this PC.'
@@ -298,6 +299,7 @@ $dashNote.Height = 36
 function Update-DashNote {
     $ip = Get-TailscaleIP
     $dashNote.Text = $(if (-not $ip) { 'Tailscale isn''t connected on this PC - the dashboard only works over Tailscale (so it''s never open to the internet).' }
+        elseif (Test-FamilyInstalled 'Remote') { "Hallow Remote is installed - it's the main phone app now (open it and scan its QR code). This dashboard keeps working and points to it: temps, load, games, servers and drives over Tailscale. Needs the tray app running." }
         else { "Temps, load, what you're playing, servers and drives on your phone - plus Hallow Mixer's levels, mute and presets if it's running. Works on devices in your Tailscale network, from anywhere. Needs the tray app running." })
 }
 Add-Tool $f 'Dashboard' 'Served by the tray app' {

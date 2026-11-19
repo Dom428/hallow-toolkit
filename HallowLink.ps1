@@ -69,6 +69,81 @@ function Update-MixerPosts($St, [datetime]$Now = (Get-Date)) {
     }
 }
 
+# ---- v5.6: saved Hallow Clips clips (off unless you turn it on). The tray calls this every 5 s with Clips' status.json.
+# Only clips saved after it starts looking are posted (never your older ones), one post per save - the newest if several
+# arrive at once. Under Discord's 10 MB limit the clip itself is uploaded, otherwise just "<game> - saved a clip".
+# The upload runs in the background; the webhook link is never logged.
+$ClipsStatusFile = Join-Path $env:LOCALAPPDATA 'HallowClips\status.json'
+$DiscordFileLimit = 10MB
+function Get-ClipsStatus { if (Test-Path $ClipsStatusFile) { try { Get-Content $ClipsStatusFile -Raw -Encoding UTF8 | ConvertFrom-Json } catch { $null } } }
+$script:ClipPost = @{ Since = $null; Job = $null }
+function Get-ClipTime($Clip) {
+    try { return [datetime]::Parse("$($Clip.time)") } catch { }
+    try { (Get-Item -LiteralPath "$($Clip.file)" -ErrorAction Stop).LastWriteTime } catch { [datetime]::MinValue }
+}
+function Update-ClipPosts($St, [string]$Url, [datetime]$Now = (Get-Date)) {
+    $p = $script:ClipPost
+    Complete-ClipPost
+    if (-not $St) { return }
+    $clips = @($St.clips | Where-Object { $_ -and $_.file } | ForEach-Object { [pscustomobject]@{ Clip = $_; Time = (Get-ClipTime $_) } } | Sort-Object Time -Descending)
+    if ($null -eq $p.Since) {   # first look: remember what's already there, don't post it
+        $p.Since = $(if ($clips.Count -and $clips[0].Time -gt $Now) { $clips[0].Time } else { $Now }); return
+    }
+    $new = @($clips | Where-Object { $_.Time -gt $p.Since })
+    if (-not $new.Count -or $p.Job) { return }   # nothing new, or still uploading the last one (try next time)
+    $p.Since = $new[0].Time
+    if (-not $Url) { $Url = Get-DiscordWebhook }
+    if ($Url) { Send-DiscordClip $new[0].Clip $Url }
+}
+function Send-DiscordClip($Clip, [string]$Url) {
+    Add-Type -AssemblyName System.Net.Http
+    $game = "$($Clip.game)".Trim(); if (-not $game) { $game = 'A game' }
+    $safe = $game -replace '([\\*_~`|>#\[\]()])', '\$1'
+    $file = "$($Clip.file)"; $size = 0L
+    try { $size = (Get-Item -LiteralPath $file -ErrorAction Stop).Length } catch { }
+    $fits = $size -gt 0 -and $size -le ($DiscordFileLimit - 64KB)   # room for the rest of the upload
+    $text = "**$safe** - saved a clip" + $(if ($size -gt 0 -and -not $fits) { " ({0:N0} MB - too big to upload to Discord)" -f ($size / 1MB) } else { '' })
+    $json = @{ username = 'Hallow Toolkit'; content = $text; allowed_mentions = @{ parse = @() } } | ConvertTo-Json -Depth 4 -Compress
+    $job = @{ Game = $game; Fits = $fits; Client = $null; Form = $null; Stream = $null; Task = $null; Url = $Url; Text = $json }
+    try {
+        $job.Client = New-Object System.Net.Http.HttpClient; $job.Client.Timeout = [TimeSpan]::FromMinutes(3)
+        [void]$job.Client.DefaultRequestHeaders.UserAgent.TryParseAdd('HallowToolkit')
+        $job.Form = New-Object System.Net.Http.MultipartFormDataContent
+        $job.Form.Add((New-Object System.Net.Http.StringContent($json, [Text.Encoding]::UTF8, 'application/json')), 'payload_json')
+        if ($fits) {
+            $job.Stream = [IO.File]::Open($file, 'Open', 'Read', 'ReadWrite, Delete')
+            $fc = New-Object System.Net.Http.StreamContent($job.Stream)
+            $fc.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue('video/mp4')
+            $name = [IO.Path]::GetFileName($file) -replace '[^\w\-. ]', '_'
+            $job.Form.Add($fc, 'files[0]', $name)
+        }
+        $job.Task = $job.Client.PostAsync($Url, $job.Form)
+        $script:ClipPost.Job = $job
+    } catch { Close-ClipJob $job; Log "[tray] Clip post failed: $($_.Exception.Message -replace 'https?://\S+', '(webhook)')" }
+}
+function Close-ClipJob($Job) { foreach ($k in 'Stream', 'Form', 'Client') { if ($Job.$k) { try { $Job.$k.Dispose() } catch { } } } }
+# Checks on the upload started by Send-DiscordClip. If Discord says the file is too big, posts the text instead.
+function Complete-ClipPost {
+    $j = $script:ClipPost.Job
+    if (-not $j -or -not $j.Task.IsCompleted) { return }
+    $script:ClipPost.Job = $null
+    $code = 0; $err = $null
+    if ($j.Task.IsFaulted -or $j.Task.IsCanceled) { $err = $(if ($j.Task.Exception) { $j.Task.Exception.GetBaseException().Message } else { 'timed out' }) }
+    else { $code = [int]$j.Task.Result.StatusCode; $j.Task.Result.Dispose() }
+    Close-ClipJob $j
+    if ($code -ge 200 -and $code -lt 300) { Log "[tray] Posted a clip from $($j.Game) to Discord$(if (-not $j.Fits) { ' (text only - too big to upload)' })."; return }
+    if ($code -eq 413 -and $j.Fits) {   # Discord's limit was lower than expected: post the text only
+        $job = @{ Game = $j.Game; Fits = $false; Url = $j.Url; Text = $j.Text }
+        try {
+            $job.Client = New-Object System.Net.Http.HttpClient; $job.Client.Timeout = [TimeSpan]::FromSeconds(30)
+            $job.Task = $job.Client.PostAsync($j.Url, (New-Object System.Net.Http.StringContent($j.Text, [Text.Encoding]::UTF8, 'application/json')))
+            $script:ClipPost.Job = $job
+        } catch { Close-ClipJob $job }
+        return
+    }
+    Log "[tray] Clip post failed: $(if ($err) { $err -replace 'https?://\S+', '(webhook)' } else { "Discord answered $code" })"
+}
+
 # ================================================================ PHONE DASHBOARD
 # A tiny read-only web page served by the tray app on this PC's Tailscale address only, behind a secret key in the link.
 $DashPort = 5190
@@ -150,6 +225,11 @@ function Get-DashboardHtml($State) {
         }
         $mixHtml = "<h2>Mixer</h2>$np<table>$($mr -join '')</table><div class='ps'>$($pb -join '')</div>$pf"
     }
+    $remoteHtml = ''
+    if (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\Hallow Remote\HallowRemote.exe')) {
+        $remoteHtml = "<div class='rm'><b>Try Hallow Remote</b> - it's installed on this PC and is the main phone app now: mixer, your Hub games with covers, game session and PC stats. " +
+            "Open Hallow Remote on the PC and scan its QR code. This page keeps working too.</div>"
+    }
     $gamesHtml = ''
     $hg = Get-HubGames
     if ($hg -and @($hg.games).Count) {
@@ -174,8 +254,9 @@ td{padding:7px 8px;border-bottom:1px solid #2c2538;font-size:14px}.good{color:#6
 .mx{text-align:right;white-space:nowrap}.b{display:inline-block;min-width:38px;padding:8px 10px;margin-left:6px;border-radius:6px;background:#2f2740;color:#ece8f4;text-decoration:none;text-align:center;font-weight:600}
 .np{background:#241e2e;border-radius:6px;padding:10px 12px;margin-bottom:8px}.nt{font-weight:600;font-size:15px;overflow-wrap:anywhere}.nb{margin-top:8px}.nb .b{margin:0 6px 0 0}
 .pl{margin-top:8px}.pf{margin-top:4px}.pf .b{margin:0 6px 6px 0}.b.cur{background:#a98be0;color:#16121c}
+.rm{background:#241e2e;border-left:3px solid #f07820;border-radius:6px;padding:10px 12px;margin-top:12px;font-size:14px;line-height:1.4}.rm b{color:#f07820}
 .b.w{min-width:64px}.b.on{background:#f05a5a;color:#16121c}.p{display:inline-block;width:46px;text-align:center}.ps{margin-top:10px}.ps .b{margin:0 6px 6px 0;background:#f07820;color:#16121c}
-</style></head><body><h1>HALLOW</h1><div class='m'>$(& $e $env:COMPUTERNAME) - updated $(Get-Date -Format 'HH:mm:ss') - refreshes every 15 s</div>
+</style></head><body><h1>HALLOW</h1><div class='m'>$(& $e $env:COMPUTERNAME) - updated $(Get-Date -Format 'HH:mm:ss') - refreshes every 15 s</div>$remoteHtml
 <h2>Now</h2><div class='g'>$($tiles -join '')</div>$mixHtml$gamesHtml<h2>Servers</h2><table>$($srv -join '')</table><h2>Drives</h2><table>$($rows -join '')</table>
 </body></html>
 "@

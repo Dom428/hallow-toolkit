@@ -299,6 +299,9 @@ $timer.Add_Tick({
         if ((Get-DiscordWebhook) -and ((Get-LinkSetting 'DiscordNowPlaying' $false) -or (Get-LinkSetting 'DiscordMicStatus' $false))) {
             try { Update-MixerPosts (Invoke-Mixer '/state') } catch { Log "[tray] mixer posts: $($_.Exception.Message)" }
         }
+        if ((Get-DiscordWebhook) -and (Get-LinkSetting 'DiscordClips' $false)) {
+            try { Update-ClipPosts (Get-ClipsStatus) } catch { Log "[tray] clip posts: $($_.Exception.Message -replace 'https?://\S+', '(webhook)')" }
+        } else { $script:ClipPost.Since = $null; Complete-ClipPost }   # off: start fresh next time it's turned on
         if ($g -and -not $script:InGame) {
             $script:InGame = $g.Name; $script:Misses = 0; $script:HotWarned = $false
             $script:DashState.InGame = $g.Name; $script:DashState.GameStart = Get-Date
