@@ -30,15 +30,12 @@
 | **5.6** | Phone dashboard points to Hallow Remote; Discord posts for saved Hallow Clips clips (opt-in) |
 | **5.7** | Check links: is every Hallow app running and linked, with one-click fixes; daily tray check |
 | **5.8** | One Hallow accent colour for all the apps; crash reports kept on this PC, crashes in Check links |
+| **5.9** | Pre-game check (Gaming tab and tray); scheduled clean-up with reports (opt-in) |
 
 ## Next
 
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.9 - Pre-game check and scheduled clean-up
-- Pre-game check (Gaming tab and tray): restart-pending updates, app updates, RAM, game drive space, GPU / CPU, apps that hurt games, NVIDIA driver age, Hallow apps running - with fixes
-- Scheduled clean-up (opt-in): weekly or monthly at your time, with the Quick Clean-up items you pick, and a report of what was freed
 
 ### Later
 - Drivers: fully automatic for MSI and Gigabyte boards, like ASUS today

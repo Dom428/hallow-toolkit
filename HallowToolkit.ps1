@@ -7,12 +7,15 @@
     -Mode Quick    run the Quick Clean-up (add -NoRecycleBin to keep the Recycle Bin)
     -Mode Crash    print the crash detective report
     -Mode SessionStart / SessionEnd   game session on / off (used by Hallow Hub when a game starts and closes)
+    -Mode Clean    scheduled clean-up (the daily task; cleans when the weekly / monthly slot is due; -DryRun measures only)
 #>
 param(
-    [ValidateSet('Gui', 'Report', 'Quick', 'Crash', 'Backup', 'SessionStart', 'SessionEnd')]
+    [ValidateSet('Gui', 'Report', 'Quick', 'Crash', 'Backup', 'SessionStart', 'SessionEnd', 'Clean')]
     [string]$Mode = 'Gui',
     [switch]$NoRecycleBin,
-    [string]$StartPage = 'Tune-up'
+    [string]$StartPage = 'Tune-up',
+    [string]$Run = '',      # PreGame: run the pre-game check when the window opens (tray menu)
+    [switch]$DryRun        # with -Mode Clean: measure only, delete nothing
 )
 
 $ErrorActionPreference = 'Continue'
@@ -24,7 +27,7 @@ trap { Write-HallowCrash $_ | Out-Null; continue }
 if ($Mode -eq 'Gui' -and -not $IsAdmin -and -not $env:HALLOW_NO_ELEVATE) {
     try {
         Start-Process powershell.exe -Verb RunAs -ErrorAction Stop -ArgumentList @(
-            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`"", '-StartPage', $StartPage)
+            '-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$PSCommandPath`"", '-StartPage', $StartPage, '-Run', $(if ($Run) { $Run } else { 'none' }))
         exit
     } catch { $env:HALLOW_NO_ELEVATE = '1' }
 }
@@ -34,6 +37,7 @@ if ($Mode -eq 'Quick') { Invoke-QuickClean (-not $NoRecycleBin); return }
 if ($Mode -eq 'Crash') { Invoke-CrashDetective; return }
 if ($Mode -eq 'SessionStart') { Start-GameSession; return }
 if ($Mode -eq 'SessionEnd') { Stop-GameSession; return }
+if ($Mode -eq 'Clean') { [void](Invoke-ScheduledClean -DryRun:$DryRun); return }
 if ($Mode -eq 'Backup' -and (Test-FamilyInstalled 'Vault')) { Log 'Weekly game-save backup skipped - Hallow Vault is installed and backs up your game saves.'; return }
 if ($Mode -eq 'Backup') { & $SaveBackupWork (Get-DefaultBackupDir) 5 $false | ForEach-Object { Log "$_" }; return }
 
@@ -1228,6 +1232,7 @@ foreach ($l in $launchers) {
 }
 
 . (Join-Path $PSScriptRoot 'HallowMorePage.ps1')   # adds sections to pages built above (incl. Tools)
+. (Join-Path $PSScriptRoot 'HallowPreGamePage.ps1')   # v5.9: pre-game check (Gaming), scheduled clean-up (Tune-up)
 
 # ---- go
 $form.Add_Shown({

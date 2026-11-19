@@ -88,6 +88,9 @@ $miSession.Add_Click({
     Update-SessionItem
 })
 [void]$menu.Items.Add($miSession)
+$miPreGame = New-Object System.Windows.Forms.ToolStripMenuItem('Pre-game check')
+$miPreGame.Add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-StartPage', 'Gaming', '-Run', 'PreGame') })
+[void]$menu.Items.Add($miPreGame)
 $miAudio = New-Object System.Windows.Forms.ToolStripMenuItem('Switch audio (speakers / headset)   Ctrl+Alt+Home')
 $miAudio.Add_Click({ try { Notify (Switch-AudioSetup) } catch { Notify "Audio switch failed: $($_.Exception.Message)" } })
 [void]$menu.Items.Add($miAudio)
@@ -131,7 +134,7 @@ $miExit = $menu.Items.Add('Exit tray app')
 $miExit.Add_Click({ $timer.Stop(); $dashTimer.Stop(); if ($script:Dash) { try { $script:Dash.Stop() } catch { } }; $icon.Visible = $false; if ($hotkey) { $hotkey.Dispose() }; if ($audioKey) { $audioKey.Dispose() }; [System.Windows.Forms.Application]::Exit() })
 if (Test-IconFont) {
     $ic = [System.Drawing.Color]::FromArgb(70, 60, 90)
-    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miAudio, 'volume-high'), @($miTimer, 'moon'), @($miExit, 'power-off'))) {
+    foreach ($pair in @(@($miOpen, 'screwdriver-wrench'), @($miMon, 'gauge-high'), @($miServer, 'server'), @($miClean, 'broom'), @($miSession, 'rocket'), @($miPreGame, 'clipboard-check'), @($miAudio, 'volume-high'), @($miTimer, 'moon'), @($miExit, 'power-off'))) {
         $pair[0].Image = Get-Icon $pair[1] $ic 16
     }
 }
@@ -313,6 +316,15 @@ $timer.Add_Tick({
         if ($script:Ticks % 60 -eq 2) { Start-TrayServerCheck }   # 5 minutes
         if ($script:Ticks % 720 -eq 60) { Start-TrayLinkCheck }    # 5 minutes after start, then hourly (once a day is inside)
         Complete-TrayLinkCheck
+        if ($script:Ticks % 12 -eq 7) {   # every minute: a new scheduled clean-up report -> show what it freed (once)
+            try {
+                $rep = @(Get-CleanReports | Where-Object { -not $_.DryRun })[0]
+                if ($rep -and "$((Get-Settings).LastCleanReportShown)" -ne (Split-Path -Leaf $rep.File)) {
+                    $s = Get-Settings; $s | Add-Member LastCleanReportShown (Split-Path -Leaf $rep.File) -Force; Save-Settings $s
+                    if (((Get-Date) - [datetime]::Parse($rep.Time)).TotalDays -lt 2) { Notify "Scheduled clean-up: $(Format-CleanReport $rep)" }
+                }
+            } catch { }
+        }
         Complete-TrayServerCheck
         $g = Find-RunningGame
         if ($script:InGame -and $miRecord.Checked) { try { $script:Samples.Add((Get-SessionSample)) } catch { } }

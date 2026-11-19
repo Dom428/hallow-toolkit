@@ -115,10 +115,11 @@ $linkRows.FlowDirection = 'TopDown'; $linkRows.WrapContents = $false; $linkRows.
 $linkRows.MinimumSize = New-Object System.Drawing.Size(860, 0); $linkRows.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
 $f.Controls.Add($linkRows); $f.SetFlowBreak($linkRows, $true)
 $FixTitles = @{ start = 'Start it'; autostart = 'Turn on Start with Windows'; open = 'Open settings'; crash = 'Show' }
-function Show-LinkResults($Lines) {
-    foreach ($oldRow in @($linkRows.Controls)) { foreach ($b in @($oldRow.Controls | Where-Object { $_ -is [System.Windows.Forms.Button] })) { [void]$allButtons.Remove($b) }; $oldRow.Dispose() }
-    $linkRows.Controls.Clear()
-    foreach ($l in @($Lines | Where-Object { $_.Level })) {
+# Rows: Title, Level (good / warn / bad), FixTitle, FixIcon, FixCode (PowerShell run when its button is clicked)
+function Show-CheckRows($Panel, $Rows) {
+    foreach ($oldRow in @($Panel.Controls)) { foreach ($b in @($oldRow.Controls | Where-Object { $_ -is [System.Windows.Forms.Button] })) { [void]$allButtons.Remove($b) }; $oldRow.Dispose() }
+    $Panel.Controls.Clear()
+    foreach ($l in @($Rows | Where-Object { $_.Level })) {
         $row = New-Object System.Windows.Forms.Panel
         $row.Size = New-Object System.Drawing.Size(860, 38); $row.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 2); $row.BackColor = $C.Bg
         $col = switch ($l.Level) { 'good' { $C.Good } 'bad' { $C.Bad } default { $C.Warn } }
@@ -130,15 +131,23 @@ function Show-LinkResults($Lines) {
         $t = New-Object System.Windows.Forms.Label
         $t.UseMnemonic = $false; $t.AutoSize = $false; $t.Location = New-Object System.Drawing.Point(28, 0); $t.Size = New-Object System.Drawing.Size(550, 38)
         $t.TextAlign = 'MiddleLeft'; $t.Font = New-Font 9.5; $t.ForeColor = $(if ($l.Level -eq 'good') { $C.Text } else { $col })
-        $t.Text = "Hallow $($l.App) - $($l.Text)"; $row.Controls.Add($t)
-        if ($l.Fix -and $FixTitles[$l.Fix]) {
-            $b = Add-Tool $row $FixTitles[$l.Fix] '' ([scriptblock]::Create("Log (Invoke-FamilyFix '$($l.App)' '$($l.Fix)'); Start-LinkCheck")) -Width 270 -Icon $(switch ($l.Fix) { 'start' { 'play' } 'autostart' { 'power-off' } 'crash' { 'file-lines' } default { 'gear' } })
+        $t.Text = "$($l.Title)"; $row.Controls.Add($t)
+        if ($l.FixCode -and $l.FixTitle) {
+            $b = Add-Tool $row $l.FixTitle '' ([scriptblock]::Create($l.FixCode)) -Width 270 -Icon $(if ($l.FixIcon) { $l.FixIcon } else { 'gear' })
             $b.Size = New-Object System.Drawing.Size(270, 34); $b.Location = New-Object System.Drawing.Point(586, 2)
         }
-        $linkRows.Controls.Add($row)
+        $Panel.Controls.Add($row)
     }
 }
-function Start-LinkCheck {
+function Show-LinkResults($Lines) {
+    $rows = foreach ($l in @($Lines | Where-Object { $_.Level })) {
+        $fix = $(if ($l.Fix -and $FixTitles[$l.Fix]) { $l.Fix })
+        [pscustomobject]@{ Title = "Hallow $($l.App) - $($l.Text)"; Level = $l.Level; FixTitle = $(if ($fix) { $FixTitles[$fix] })
+            FixIcon = $(switch ($fix) { 'start' { 'play' } 'autostart' { 'power-off' } 'crash' { 'file-lines' } default { 'gear' } })
+            FixCode = $(if ($fix) { "Log (Invoke-FamilyFix '$($l.App)' '$fix'); Start-LinkCheck" }) }
+    }
+    Show-CheckRows $linkRows @($rows)
+}function Start-LinkCheck {
     Start-Background 'Check links' $FamilyLinkCheckWork @([string[]]@($FamilyApps | ForEach-Object Name), @{ ToolkitCrashDir = $CrashDir }) {
         param($o)
         $lines = @($o | Where-Object { $_.Level })

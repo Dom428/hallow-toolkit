@@ -9,6 +9,16 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.9
+- Gaming > Pre-game check (also in the tray menu): a quick read-only look before you play -
+  Windows updates waiting for a restart, app updates (winget), RAM, free space on your game
+  drives, CPU / GPU load and temperature, background apps that get in the way, how old your NVIDIA
+  driver is, and whether Hallow Overlay and Clips are running. Each problem has a fix button.
+- Tune-up > Scheduled clean-up (off until you turn it on): weekly or monthly at the time you pick,
+  with the Quick Clean-up items you tick. If the PC is off then, it runs next time it's on. The
+  tray shows what it freed, and the reports are listed under it. Preview shows what it would free
+  without deleting anything.
+
 WHAT'S NEW IN 5.8
 - Hallow tab > Hallow accent: pick one accent colour for all the Hallow apps (8 colours or your
   own). Apps with "Use the Hallow accent" on switch to it straight away. To use it in the toolkit
