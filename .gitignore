@@ -5,6 +5,7 @@
 !*.ico
 !*.bat
 !README.md
+!ROADMAP.md
 !.gitignore
 !release/**
 bin/
