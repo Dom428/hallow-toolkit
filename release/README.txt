@@ -9,6 +9,10 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.2
+- Works with Hallow Hub (new app): Hub can turn your game session on when a game starts and off
+  when it closes, so Boost apps and High performance power follow your games by themselves.
+
 WHAT'S NEW IN 5.1
 - A modern look: rounded tool cards with a soft outline, a rounded highlight with an accent bar
   on the open page in the sidebar, the logo next to the name, and a dark window title bar.

@@ -6,9 +6,10 @@
     -Mode Report   print a health report
     -Mode Quick    run the Quick Clean-up (add -NoRecycleBin to keep the Recycle Bin)
     -Mode Crash    print the crash detective report
+    -Mode SessionStart / SessionEnd   game session on / off (used by Hallow Hub when a game starts and closes)
 #>
 param(
-    [ValidateSet('Gui', 'Report', 'Quick', 'Crash', 'Backup')]
+    [ValidateSet('Gui', 'Report', 'Quick', 'Crash', 'Backup', 'SessionStart', 'SessionEnd')]
     [string]$Mode = 'Gui',
     [switch]$NoRecycleBin,
     [string]$StartPage = 'Tune-up'
@@ -29,6 +30,8 @@ if ($Mode -eq 'Gui' -and -not $IsAdmin -and -not $env:HALLOW_NO_ELEVATE) {
 if ($Mode -eq 'Report') { Invoke-HealthReport; return }
 if ($Mode -eq 'Quick') { Invoke-QuickClean (-not $NoRecycleBin); return }
 if ($Mode -eq 'Crash') { Invoke-CrashDetective; return }
+if ($Mode -eq 'SessionStart') { Start-GameSession; return }
+if ($Mode -eq 'SessionEnd') { Stop-GameSession; return }
 if ($Mode -eq 'Backup') { & $SaveBackupWork (Get-DefaultBackupDir) 5 $false | ForEach-Object { Log "$_" }; return }
 
 # ================================================================ WINDOW
