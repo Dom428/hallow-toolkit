@@ -28,15 +28,12 @@
 | **5.3** | Start Hallow Hub games from the phone dashboard |
 | **5.5** | Hallow tab: install, open and update every Hallow app; save backups hand over to Hallow Vault |
 | **5.6** | Phone dashboard points to Hallow Remote; Discord posts for saved Hallow Clips clips (opt-in) |
+| **5.7** | Check links: is every Hallow app running and linked, with one-click fixes; daily tray check |
 
 ## Next
 
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.7 - Check links
-- Hallow tab > Check links: is each Hallow app running, answering the others, starting with Windows, Hub hosting the one Hallow icon - green / amber / red with a one-click fix
-- The tray checks once a day and pops up only when something is red
 
 ### Later
 - Drivers: fully automatic for MSI and Gigabyte boards, like ASUS today

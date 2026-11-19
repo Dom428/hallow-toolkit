@@ -115,3 +115,122 @@ function Start-FamilyInstaller([string]$App, [string]$Installer) {
     Set-Content $cmd @('@echo off', "title Hallow $App - installing", $run, 'timeout /t 3 >nul') -Encoding ASCII
     Start-Process explorer.exe "`"$cmd`""
 }
+
+# ================================================================ CHECK LINKS (v5.7)
+# One line per check for each installed app: running, its family pipe answers `ping` (and runs the installed version),
+# status.json fresh, starts with Windows, Mixer's API answers with its key, Overlay can read FPS / server events,
+# Hub hosts the one Hallow icon. Level: good / warn / bad. Fix: start / autostart / open (or none).
+# Self-contained (runs in a background runspace). Secrets are never read into the output: the Mixer key is only sent
+# to Mixer itself. Older app versions that don't know a command give amber, never red.
+# $Opt (tests only): Local, Roaming, RunKey, PipeSuffix, Running (app names treated as running).
+$FamilyLinkCheckWork = {
+    param([string[]]$Apps, $Opt)
+    if (-not $Opt) { $Opt = @{} }
+    $local = $(if ($Opt.Local) { $Opt.Local } else { $env:LOCALAPPDATA })
+    $roam = $(if ($Opt.Roaming) { $Opt.Roaming } else { $env:APPDATA })
+    $runKey = $(if ($Opt.RunKey) { $Opt.RunKey } else { 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' })
+    $suffix = "$($Opt.PipeSuffix)"
+    $out = New-Object System.Collections.ArrayList
+    function Add-Line($App, $Check, $Level, $Text, $Fix) { [void]$out.Add([pscustomobject]@{ App = $App; Check = $Check; Level = $Level; Text = $Text; Fix = $Fix }) }
+    function Ver([string]$t) { $m = [regex]::Match("$t", '\d+(\.\d+){0,3}'); if (-not $m.Success) { return $null }; $p = @($m.Value -split '\.'); while ($p.Count -lt 4) { $p += '0' }; try { [version]($p -join '.') } catch { $null } }
+    function Short($v) { if (-not $v) { return '?' }; $s = "$($v.Major).$($v.Minor)"; if ($v.Build -gt 0) { $s += ".$($v.Build)" }; $s }
+    function Pipe-Name([string]$App) { "HallowFamily.$App.$([Environment]::UserName)$suffix" }
+    $pipes = $null; try { $pipes = @([IO.Directory]::GetFiles('\\.\pipe\') | ForEach-Object { $_.Substring(9) }) } catch { }
+    function Test-Pipe([string]$App) { if ($null -eq $pipes) { return $true }; $pipes -contains (Pipe-Name $App) }
+    # one line out, one line back ($null when nothing came back)
+    function Send-Pipe([string]$App, [string]$Line) {
+        $pc = New-Object System.IO.Pipes.NamedPipeClientStream('.', (Pipe-Name $App), [System.IO.Pipes.PipeDirection]::InOut)
+        try {
+            $pc.Connect(1500)
+            $b = [Text.Encoding]::UTF8.GetBytes("$Line`n"); $pc.Write($b, 0, $b.Length); $pc.Flush()
+            $r = New-Object IO.StreamReader($pc, (New-Object Text.UTF8Encoding($false)))
+            $t = $r.ReadLineAsync(); if (-not $t.Wait(3000)) { return $null }
+            "$($t.Result)".Trim()
+        } catch { $null } finally { try { $pc.Dispose() } catch { } }
+    }
+    function Is-Running([string]$App) { if ($Opt.Running) { return @($Opt.Running) -contains $App }; [bool](Get-Process "Hallow$App" -ErrorAction SilentlyContinue) }
+    $installed = @{}
+    foreach ($a in $Apps) {
+        $exe = Join-Path $local "Programs\Hallow $a\Hallow$a.exe"
+        if (-not (Test-Path $exe)) { continue }
+        $installed[$a] = $true
+        $iv = $null; try { $iv = Ver (Get-Item $exe).VersionInfo.FileVersion } catch { }
+        $run = Is-Running $a
+        if ($run) { Add-Line $a 'Running' 'good' 'Running' $null } else { Add-Line $a 'Running' 'warn' 'Not running' 'start' }
+        # starts with Windows: the app's own HKCU Run value "Hallow<App>" ("<exe>" --tray), the same one its Settings switch writes
+        $rv = $null; try { $rv = (Get-ItemProperty -Path $runKey -Name "Hallow$a" -ErrorAction Stop)."Hallow$a" } catch { }
+        if (-not $rv) { Add-Line $a 'Start with Windows' 'warn' "Doesn't start with Windows" 'autostart' }
+        elseif ("$rv" -notlike "*$exe*") { Add-Line $a 'Start with Windows' 'warn' 'Starts with Windows from an old location' 'autostart' }
+        else { Add-Line $a 'Start with Windows' 'good' 'Starts with Windows' $null }
+        if (-not $run) { continue }
+        # the family pipe
+        if (-not (Test-Pipe $a)) { Add-Line $a 'Link' 'warn' 'No link to the other Hallow apps - this version is too old, update it' $null }
+        else {
+            $r = Send-Pipe $a 'ping'
+            if ($null -eq $r) { Add-Line $a 'Link' 'bad' "Its link doesn't answer - close and reopen it" $null }
+            elseif ($r -like 'error unknown command*') { Add-Line $a 'Link' 'warn' "Its link doesn't know ping yet - update it" $null }
+            elseif ($r -like 'ok*') {
+                $pv = $null; try { $pv = Ver ((($r -replace '^ok\s*', '') | ConvertFrom-Json).version) } catch { }
+                if ($pv -and $iv -and $pv -ne $iv) { Add-Line $a 'Link' 'warn' "Link answers, but the running copy is $(Short $pv) and $(Short $iv) is installed - close and reopen it" $null }
+                else { Add-Line $a 'Link' 'good' "Link answers$(if ($pv) { " (v$(Short $pv))" })" $null }
+            } else { Add-Line $a 'Link' 'warn' "Its link gave an odd answer - update it" $null }
+        }
+        # status.json: written when something changes and at least on start
+        $sf = if ($a -eq 'Clips') { Join-Path $local 'HallowClips\status.json' } else { Join-Path $roam "Hallow$a\status.json" }
+        if (Test-Path $sf) {
+            $t = (Get-Item $sf).LastWriteTime
+            try { $u = [datetime]::Parse("$((Get-Content $sf -Raw -Encoding UTF8 | ConvertFrom-Json).updated)"); if ($u -gt $t) { $t = $u } } catch { }
+            $age = [int]((Get-Date) - $t).TotalMinutes
+            if ($age -le 10) { Add-Line $a 'Status' 'good' 'Status file is fresh' $null } else { Add-Line $a 'Status' 'warn' "Status file last updated $age min ago (fine if nothing changed since)" $null }
+        } elseif ($a -ne 'Mixer') { Add-Line $a 'Status' 'warn' 'No status file - this version is too old, update it' $null }
+        if ($a -eq 'Mixer') {
+            $api = $null; try { $api = Get-Content (Join-Path $roam 'HallowMixer\api.json') -Raw | ConvertFrom-Json } catch { }
+            if (-not $api -or -not $api.port) { Add-Line $a 'Mixer API' 'warn' 'Toolkit control is off - turn on "Let Hallow Toolkit control the mixer" in its Settings' 'open' }
+            else {
+                $code = 0
+                try { $rq = [Net.HttpWebRequest]::Create("http://127.0.0.1:$([int]$api.port)/state"); $rq.Headers['X-Hallow-Key'] = "$($api.key)"; $rq.Timeout = 2500; $rs = $rq.GetResponse(); $code = [int]$rs.StatusCode; $rs.Close() }
+                catch [Net.WebException] { if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode } }
+                catch { }
+                if ($code -ge 200 -and $code -lt 300) { Add-Line $a 'Mixer API' 'good' 'Mixer API answers with its key' $null }
+                elseif ($code -eq 401 -or $code -eq 403) { Add-Line $a 'Mixer API' 'bad' "Mixer API doesn't accept its key - close and reopen Hallow Mixer" $null }
+                else { Add-Line $a 'Mixer API' 'warn' "Mixer API doesn't answer - check its Settings" 'open' }
+            }
+        }
+        if ($a -eq 'Overlay') {
+            # FPS and the game server come from Windows event tracing; a normal account needs the Performance Log Users group
+            $st = $null; if (Test-Path $sf) { try { $st = Get-Content $sf -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json } catch { } }
+            $etw = $null
+            if ($st -and $st.PSObject.Properties.Name -contains 'etw') { $etw = [bool]$st.etw }
+            elseif ($st -and $st.PSObject.Properties.Name -contains 'fpsDenied') { $etw = -not [bool]$st.fpsDenied }
+            else { try { $etw = [bool](@([Security.Principal.WindowsIdentity]::GetCurrent().Groups | ForEach-Object Value) -contains 'S-1-5-32-559') } catch { } }
+            if ($etw) { Add-Line $a 'FPS and server' 'good' 'FPS and game server can be read' $null }
+            else { Add-Line $a 'FPS and server' 'warn' "FPS and game server may stay hidden - Windows only lets the Performance Log Users group read them (see Overlay's Settings)" 'open' }
+        }
+    }
+    # one Hallow icon: Hub hosts the tray menu for the family
+    if ($installed['Hub'] -and @($installed.Keys | Where-Object { $_ -ne 'Hub' }).Count) {
+        if (-not (Is-Running 'Hub')) { Add-Line 'Hub' 'One Hallow icon' 'warn' "Hub isn't running, so each app shows its own tray icon" 'start' }
+        else {
+            $r = $(if (Test-Pipe 'Hub') { Send-Pipe 'Hub' 'tray-host' })
+            if ($r -like 'ok*') {
+                $on = $false; try { $on = [bool]((($r -replace '^ok\s*', '') | ConvertFrom-Json).on) } catch { }
+                if ($on) { Add-Line 'Hub' 'One Hallow icon' 'good' 'Hub hosts the one Hallow icon' $null }
+                else { Add-Line 'Hub' 'One Hallow icon' 'warn' 'One Hallow icon is off in Hub''s Settings' 'open' }
+            } else { Add-Line 'Hub' 'One Hallow icon' 'warn' 'This Hub version doesn''t host the Hallow icon yet - update it' $null }
+        }
+    }
+    $out
+}
+# Fixes for a check line, run as you: start the app, or turn on its own Start with Windows value.
+function Invoke-FamilyFix([string]$App, [string]$Fix) {
+    $exe = Get-FamilyExe $App
+    if (-not (Test-Path $exe)) { return "Hallow $App is not installed." }
+    switch ($Fix) {
+        'start' { [void](Open-FamilyApp $App); "Starting Hallow $App." }
+        'open' { [void](Open-FamilyApp $App); "Opening Hallow $App - the setting is in its Settings." }
+        'autostart' {
+            Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name "Hallow$App" -Value "`"$exe`" --tray"
+            "Hallow $App now starts with Windows (in the tray), the same as its own Settings switch."
+        }
+    }
+}

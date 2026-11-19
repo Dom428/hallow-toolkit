@@ -9,6 +9,15 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.7
+- Hallow tab > Check links: one green, amber or red line per check for each Hallow app - running,
+  answering the other apps (and running the version that's installed), status file fresh, starts
+  with Windows, Hallow Mixer's API answers, Overlay can read FPS and the game server, Hub hosts the
+  one Hallow icon. One-click fixes where safe: Start it, Turn on Start with Windows (the app's own
+  setting), Open settings. Older app versions show amber, never red. No keys or links are shown.
+- The tray app runs the same check quietly once a day and pops up only when something is red
+  (only if Tray alerts on the Server tab are on).
+
 WHAT'S NEW IN 5.6
 - Phone dashboard: when Hallow Remote is installed, a card at the top points to it - Remote is the
   main phone app now (mixer, Hub games with covers, game session, PC stats). The dashboard keeps

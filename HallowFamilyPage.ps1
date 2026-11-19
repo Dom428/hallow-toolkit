@@ -65,6 +65,50 @@ foreach ($app in $FamilyApps) {
 }
 $f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
 
+# ---- v5.7: Check links - is each app running, answering the others, starting with Windows...
+Add-Section $f 'Links between the apps' 'link'
+(Add-Note $f 'Green = fine, amber = worth a look, red = something is broken. The tray app also checks once a day and pops up only when something is red (if Tray alerts on the Server tab is on).').Height = 36
+Add-Tool $f 'Check links' 'Are the Hallow apps talking to each other?' { Start-LinkCheck } -Primary -Icon 'link' | Out-Null
+$f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
+$linkRows = New-Object System.Windows.Forms.FlowLayoutPanel
+$linkRows.Text = 'Link results'   # not shown (lets snapshots scroll here)
+$linkRows.FlowDirection = 'TopDown'; $linkRows.WrapContents = $false; $linkRows.AutoSize = $true; $linkRows.AutoSizeMode = 'GrowAndShrink'
+$linkRows.MinimumSize = New-Object System.Drawing.Size(860, 0); $linkRows.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
+$f.Controls.Add($linkRows); $f.SetFlowBreak($linkRows, $true)
+$FixTitles = @{ start = 'Start it'; autostart = 'Turn on Start with Windows'; open = 'Open settings' }
+function Show-LinkResults($Lines) {
+    foreach ($oldRow in @($linkRows.Controls)) { foreach ($b in @($oldRow.Controls | Where-Object { $_ -is [System.Windows.Forms.Button] })) { [void]$allButtons.Remove($b) }; $oldRow.Dispose() }
+    $linkRows.Controls.Clear()
+    foreach ($l in @($Lines | Where-Object { $_.Level })) {
+        $row = New-Object System.Windows.Forms.Panel
+        $row.Size = New-Object System.Drawing.Size(860, 38); $row.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 2); $row.BackColor = $C.Bg
+        $col = switch ($l.Level) { 'good' { $C.Good } 'bad' { $C.Bad } default { $C.Warn } }
+        if (Test-IconFont) {
+            $pb = New-Object System.Windows.Forms.PictureBox
+            $pb.Image = Get-Icon $(switch ($l.Level) { 'good' { 'circle-check' } 'bad' { 'circle-xmark' } default { 'triangle-exclamation' } }) $col 16
+            $pb.Size = New-Object System.Drawing.Size(16, 16); $pb.Location = New-Object System.Drawing.Point(4, 11); $row.Controls.Add($pb)
+        }
+        $t = New-Object System.Windows.Forms.Label
+        $t.UseMnemonic = $false; $t.AutoSize = $false; $t.Location = New-Object System.Drawing.Point(28, 0); $t.Size = New-Object System.Drawing.Size(550, 38)
+        $t.TextAlign = 'MiddleLeft'; $t.Font = New-Font 9.5; $t.ForeColor = $(if ($l.Level -eq 'good') { $C.Text } else { $col })
+        $t.Text = "Hallow $($l.App) - $($l.Text)"; $row.Controls.Add($t)
+        if ($l.Fix -and $FixTitles[$l.Fix]) {
+            $b = Add-Tool $row $FixTitles[$l.Fix] '' ([scriptblock]::Create("Log (Invoke-FamilyFix '$($l.App)' '$($l.Fix)'); Start-LinkCheck")) -Width 270 -Icon $(switch ($l.Fix) { 'start' { 'play' } 'autostart' { 'power-off' } default { 'gear' } })
+            $b.Size = New-Object System.Drawing.Size(270, 34); $b.Location = New-Object System.Drawing.Point(586, 2)
+        }
+        $linkRows.Controls.Add($row)
+    }
+}
+function Start-LinkCheck {
+    Start-Background 'Check links' $FamilyLinkCheckWork @([string[]]@($FamilyApps | ForEach-Object Name), $null) {
+        param($o)
+        $lines = @($o | Where-Object { $_.Level })
+        Show-LinkResults $lines
+        if (-not $lines.Count) { Log 'Check links: no Hallow apps are installed yet.'; return }
+        Log ('Check links: {0} green, {1} amber, {2} red.' -f @($lines | Where-Object Level -eq 'good').Count, @($lines | Where-Object Level -eq 'warn').Count, @($lines | Where-Object Level -eq 'bad').Count)
+    }
+}
+
 function Update-FamilyCards {
     $fc = Get-FamilyCache
     $famNote.Text = 'Free and open source. Install and Update get the newest release from GitHub (checksum checked) and install it for you only - no admin. ' +
@@ -134,4 +178,4 @@ $famTimer.Add_Tick({
 })
 $famTimer.Start()
 $form.Add_FormClosing({ $famTimer.Stop() })
-$script:PageShowHooks['Hallow'] = { Update-FamilyCards; Start-FamilyUpdateCheck }
+$script:PageShowHooks['Hallow'] = { Update-FamilyCards; Start-FamilyUpdateCheck; if ($env:HALLOW_SNAP) { Show-LinkResults (& $FamilyLinkCheckWork ([string[]]@($FamilyApps | ForEach-Object Name)) $null) } elseif ($StartPage -eq 'Hallow') { Start-LinkCheck } }   # opened from the tray's link alert: check straight away

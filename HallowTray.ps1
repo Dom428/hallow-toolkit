@@ -174,7 +174,37 @@ function Complete-TrayUpdateCheck {
         Notify "Hallow Toolkit v$($r.Version) is out (you have v$AppVersion). Click here to open the toolkit and update."
     }
 }
-$icon.Add_BalloonTipClicked({ if ($script:AlertPage -eq 'Server') { $script:AlertPage = ''; $miServer.PerformClick() } else { $miOpen.PerformClick() } })
+$icon.Add_BalloonTipClicked({
+    if ($script:AlertPage -eq 'Server') { $script:AlertPage = ''; $miServer.PerformClick() }
+    elseif ($script:AlertPage -eq 'Hallow') { $script:AlertPage = ''; Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-StartPage', 'Hallow') }
+    else { $miOpen.PerformClick() }
+})
+
+# ---- v5.7: links between the Hallow apps - checked quietly once a day; a pop-up only when something is red.
+# Off when Tray alerts (Server tab) are off.
+$script:LinkJob = $null
+function Start-TrayLinkCheck {
+    $s = Get-Settings
+    if ($script:LinkJob -or -not $s.ServerAlerts) { return }
+    $today = (Get-Date).ToString('yyyy-MM-dd')
+    if ("$($s.LastLinkCheck)" -eq $today) { return }
+    if (-not @($FamilyApps | Where-Object { Test-FamilyInstalled $_.Name }).Count) { return }
+    $s | Add-Member LastLinkCheck $today -Force; Save-Settings $s
+    $ps = [powershell]::Create(); [void]$ps.AddScript($FamilyLinkCheckWork.ToString()).AddArgument([string[]]@($FamilyApps | ForEach-Object Name)).AddArgument($null)
+    $script:LinkJob = @{ PS = $ps; H = $ps.BeginInvoke() }
+}
+function Complete-TrayLinkCheck {
+    if (-not $script:LinkJob -or -not $script:LinkJob.H.IsCompleted) { return }
+    try { $lines = @($script:LinkJob.PS.EndInvoke($script:LinkJob.H) | Where-Object { $_.Level }) } catch { $lines = @() }
+    $script:LinkJob.PS.Dispose(); $script:LinkJob = $null
+    $red = @($lines | Where-Object { $_.Level -eq 'bad' })
+    Log ("[tray] Hallow app links: {0} green, {1} amber, {2} red." -f @($lines | Where-Object Level -eq 'good').Count, @($lines | Where-Object Level -eq 'warn').Count, $red.Count)
+    if ($red.Count -and (Get-Settings).ServerAlerts) {
+        $msg = ($red | ForEach-Object { "Hallow $($_.App): $($_.Text)" }) -join '; '
+        if ($msg.Length -gt 180) { $msg = $msg.Substring(0, 177) + '...' }
+        $script:AlertPage = 'Hallow'; Notify "$msg. Click to open Check links."
+    }
+}
 
 # ---- server alerts: every 5 minutes; tells you when an app/server that was up goes down (twice in a row), or a drive is nearly full
 $script:SrvJob = $null; $script:SrvState = @{}; $script:DriveWarned = @{}; $script:AlertPage = ''
@@ -280,6 +310,8 @@ $timer.Add_Tick({
             } elseif ($fixedMics.Count) { Log "[tray] Mic put back to your level: $($fixedMics -join ', ')" }
         }
         if ($script:Ticks % 60 -eq 2) { Start-TrayServerCheck }   # 5 minutes
+        if ($script:Ticks % 720 -eq 60) { Start-TrayLinkCheck }    # 5 minutes after start, then hourly (once a day is inside)
+        Complete-TrayLinkCheck
         Complete-TrayServerCheck
         $g = Find-RunningGame
         if ($script:InGame -and $miRecord.Checked) { try { $script:Samples.Add((Get-SessionSample)) } catch { } }
