@@ -34,6 +34,10 @@
 ### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
 
+### 5.7 - Check links
+- Hallow tab > Check links: is each Hallow app running, answering the others, starting with Windows, Hub hosting the one Hallow icon - green / amber / red with a one-click fix
+- The tray checks once a day and pops up only when something is red
+
 ### Later
 - Drivers: fully automatic for MSI and Gigabyte boards, like ASUS today
 - BIOS 2503 for this PC: on hold
