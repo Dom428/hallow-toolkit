@@ -102,7 +102,7 @@ function Show-SessionChart($Sum) {
     $w.Controls.Add($tl)
     [void]$w.Show($form)
 }
-Add-Tool $f 'Show chart' 'Load + temperature over time' {
+Add-Tool $f 'Show chart' 'Load + temps over time' {
     if (-not $sessList.SelectedItems.Count) { Log 'Click a session first.'; return }
     Show-SessionChart $sessList.SelectedItems[0].Tag
 } -Primary -Width 210 | Out-Null
@@ -111,8 +111,20 @@ Add-Tool $f 'Sessions folder' 'Raw data (JSON)' { New-Item -ItemType Directory -
 [void]$script:AfterShown.Add({ Update-SessionList })
 
 Add-Section $f 'Game save backup'
-$saveNote = Add-Note $f ("Backups go to: " + (Get-DefaultBackupDir) + "  (newest 5 kept)")
+$saveNote = Add-Note $f ''
+$saveNote.Height = 36
+# v5.5: when Hallow Vault is installed it handles game saves, so two tools don't back up the same saves
+function Update-SaveNote {
+    $saveNote.Text = $(if (Test-FamilyInstalled 'Vault') { "Hallow Vault is installed and backs up your game saves now, so the weekly backup here skips itself. Your older backups stay in: $(Get-DefaultBackupDir)" }
+        else { "Backups go to: $(Get-DefaultBackupDir)  (newest 5 kept)" })
+}
+Update-SaveNote
 Add-Tool $f 'Back up saves now' 'Zip all game saves' {
+    if (Test-FamilyInstalled 'Vault') {
+        $ans = [System.Windows.Forms.MessageBox]::Show("Hallow Vault is installed and is handling your game saves (it backs them up when a game closes and once a day).`n`nOpen Hallow Vault instead?`n`nYes = open Hallow Vault`nNo = zip them with the toolkit anyway", $AppName, 'YesNoCancel', 'Question')
+        if ($ans -eq 'Yes') { [void](Open-FamilyApp 'Vault'); Log 'Opening Hallow Vault - it handles your game saves.'; return }
+        if ($ans -ne 'No') { return }
+    }
     $dest = Get-DefaultBackupDir
     Start-Background 'Game save backup' $SaveBackupWork @($dest, 5, $false)
 } -Primary -Width 210 | Out-Null
@@ -122,10 +134,10 @@ Add-Tool $f 'Change backup folder' 'Pick where zips go' {
     $fb.Description = 'Where should game-save backups go? (another drive is safest)'
     if ($fb.ShowDialog($form) -eq 'OK') {
         $st = Get-Settings; $st | Add-Member SaveBackupDir $fb.SelectedPath -Force; Save-Settings $st
-        $saveNote.Text = "Backups go to: $($fb.SelectedPath)  (newest 5 kept)"; Log "Game-save backups will go to $($fb.SelectedPath)"
+        Update-SaveNote; Log "Game-save backups will go to $($fb.SelectedPath)"
     }
 } -Width 210 | Out-Null
-Add-Tool $f 'Weekly backup' 'Saturdays 4 AM' { Invoke-ToggleSaveBackupTask } -Width 210 -State { [bool](Get-ScheduledTask -TaskName $SaveTaskName -ErrorAction SilentlyContinue) } | Out-Null
+Add-Tool $f 'Weekly backup' 'Saturdays 4 AM' { Invoke-ToggleSaveBackupTask; if ((Test-FamilyInstalled 'Vault') -and (Get-ScheduledTask -TaskName $SaveTaskName -ErrorAction SilentlyContinue)) { Log 'Hallow Vault is installed, so the weekly backup skips itself while Vault handles your saves.' } } -Width 210 -State { [bool](Get-ScheduledTask -TaskName $SaveTaskName -ErrorAction SilentlyContinue) } | Out-Null
 Add-Tool $f 'Open backups' 'Browse backup zips' { $d = Get-DefaultBackupDir; New-Item -ItemType Directory -Force $d | Out-Null; Start-Process explorer.exe $d } -Width 210 | Out-Null
 
 Add-Section $f 'Clips & screenshots'

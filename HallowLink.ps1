@@ -100,7 +100,7 @@ function Invoke-Mixer([string]$PathAndQuery) {
 # Sends a shared Hallow Mixer setup to the mixer (opens it first, as you, if it isn't running). Returns its message.
 function Send-MixerShare($Mix) {
     if (-not (Get-MixerApi) -or -not (Invoke-Mixer '/state')) {
-        if (-not (Test-Path $MixerExe)) { return 'Hallow Mixer is not installed - install it from the Server tab, then import again.' }
+        if (-not (Test-Path $MixerExe)) { return 'Hallow Mixer is not installed - install it from the Hallow tab, then import again.' }
         Start-Process explorer.exe "`"$MixerExe`""
         $end = (Get-Date).AddSeconds(20)
         while ((Get-Date) -lt $end -and -not (Invoke-Mixer '/state')) { Start-Sleep -Milliseconds 500 }
@@ -111,29 +111,6 @@ function Send-MixerShare($Mix) {
         $r = Invoke-RestMethod "http://127.0.0.1:$($a.port)/share-apply" -Method Post -Body ([Text.Encoding]::UTF8.GetBytes($json)) -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Hallow-Key' = "$($a.key)" } -TimeoutSec 10 -UseBasicParsing
         "$($r.msg)"
     } catch { "Hallow Mixer did not take it: $($_.Exception.Message)" }
-}
-$MixerInstallWork = {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    try { $r = Invoke-RestMethod 'https://api.github.com/repos/Dom428/hallow-mixer/releases/latest' -Headers @{ 'User-Agent' = 'HallowToolkit'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 20 }
-    catch { return [pscustomobject]@{ Error = "Could not reach GitHub: $($_.Exception.Message)" } }
-    $asset = @($r.assets | Where-Object { $_.name -like '*.zip' })[0]
-    if (-not $asset) { return [pscustomobject]@{ Error = 'The latest Hallow Mixer release has no download.' } }
-    $sha = ("$($asset.digest)" -replace '^sha256:', '')
-    $tmp = Join-Path $env:TEMP ('hallow-mixer-' + [guid]::NewGuid().ToString('N').Substring(0, 8)); New-Item -ItemType Directory -Force $tmp | Out-Null
-    $zip = Join-Path $tmp 'mixer.zip'
-    $wc = New-Object Net.WebClient; $wc.Headers['User-Agent'] = 'HallowToolkit'; $wc.DownloadFile($asset.browser_download_url, $zip); $wc.Dispose()
-    if ($sha -and (Get-FileHash $zip -Algorithm SHA256).Hash -ne $sha.ToUpper()) { Remove-Item $tmp -Recurse -Force; return [pscustomobject]@{ Error = 'Checksum mismatch - Hallow Mixer not installed.' } }
-    Expand-Archive $zip (Join-Path $tmp 'x') -Force
-    $inst = Get-ChildItem (Join-Path $tmp 'x') -Recurse -Filter 'Install.ps1' | Select-Object -First 1
-    if (-not $inst) { return [pscustomobject]@{ Error = 'The download does not contain the installer.' } }
-    Get-ChildItem $inst.DirectoryName | Unblock-File -ErrorAction SilentlyContinue
-    [pscustomobject]@{ Error = $null; Installer = $inst.FullName; Version = ($r.tag_name -replace '^[vV]', ''); Verified = [bool]$sha }
-}
-# Runs Hallow Mixer's installer as you (not as admin) - it installs per user and opens the mixer.
-function Start-MixerInstaller([string]$Installer) {
-    $cmd = Join-Path $env:TEMP 'hallow-mixer-install.cmd'
-    Set-Content $cmd @('@echo off', 'title Hallow Mixer - installing', "powershell -NoProfile -ExecutionPolicy Bypass -File `"$Installer`"", 'timeout /t 3 >nul') -Encoding ASCII
-    Start-Process explorer.exe "`"$cmd`""
 }
 
 # $State: hashtable the tray fills (InGame, GameStart, Servers, ...). Returns the HTML page.

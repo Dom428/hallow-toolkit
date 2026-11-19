@@ -32,6 +32,7 @@ if ($Mode -eq 'Quick') { Invoke-QuickClean (-not $NoRecycleBin); return }
 if ($Mode -eq 'Crash') { Invoke-CrashDetective; return }
 if ($Mode -eq 'SessionStart') { Start-GameSession; return }
 if ($Mode -eq 'SessionEnd') { Stop-GameSession; return }
+if ($Mode -eq 'Backup' -and (Test-FamilyInstalled 'Vault')) { Log 'Weekly game-save backup skipped - Hallow Vault is installed and backs up your game saves.'; return }
 if ($Mode -eq 'Backup') { & $SaveBackupWork (Get-DefaultBackupDir) 5 $false | ForEach-Object { Log "$_" }; return }
 
 # ================================================================ WINDOW
@@ -234,12 +235,12 @@ function Add-Page([string]$Name, [string]$Glyph, [string]$Subtitle) {
         $nb.ImageAlign = 'MiddleLeft'; $nb.TextImageRelation = 'ImageBeforeText'
         $nb.Padding = New-Object System.Windows.Forms.Padding(20, 0, 0, 0)
     }
-    $nb.Size = New-Object System.Drawing.Size(220, 36); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
+    $nb.Size = New-Object System.Drawing.Size(220, 34); $nb.Location = New-Object System.Drawing.Point(0, $script:navY)
     $nb.Cursor = [System.Windows.Forms.Cursors]::Hand
     $nb.Add_Paint($script:NavPaint)
     $nb.Add_Click({ Show-Page $this.Tag; foreach ($x in $navButtons) { $x.Invalidate() } })
     $nav.Controls.Add($nb); $navButtons.Add($nb)
-    $script:navY += 38
+    $script:navY += 36
     return $flow
 }
 
@@ -1078,6 +1079,7 @@ Add-Tool $f 'Open backups' 'Restore a registry backup' {
 . (Join-Path $PSScriptRoot 'HallowDriverPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowMicPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowAppsPage.ps1')
+. (Join-Path $PSScriptRoot 'HallowFamilyPage.ps1')
 . (Join-Path $PSScriptRoot 'HallowGameExtrasPage.ps1')
 
 # ================================================================ PAGE: TOOLS
@@ -1212,6 +1214,10 @@ if ($env:HALLOW_SNAP) {
     New-Item -ItemType Directory -Force $env:HALLOW_SNAP | Out-Null
     foreach ($p in @(($env:HALLOW_SNAP_PAGES -split ',') | Where-Object { $_ })) {
         Show-Page $p; 1..5 | ForEach-Object { [System.Windows.Forms.Application]::DoEvents() }
+        if ($env:HALLOW_SNAP_SCROLL) {   # scroll to the first control whose text has this in it (to check lower sections)
+            $hit = @($script:PageFlows[$p].Controls | Where-Object { "$($_.Text)" -like "*$($env:HALLOW_SNAP_SCROLL)*" })[0]
+            if ($hit) { $script:PageFlows[$p].ScrollControlIntoView($hit); 1..5 | ForEach-Object { [System.Windows.Forms.Application]::DoEvents() } }
+        }
         if (-not ('HallowPw' -as [type])) { Add-Type -Namespace '' -Name HallowPw -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool PrintWindow(System.IntPtr h, System.IntPtr dc, uint f);' }
         $bmp = New-Object System.Drawing.Bitmap($form.Width, $form.Height); $gg = [System.Drawing.Graphics]::FromImage($bmp); $dc = $gg.GetHdc()
         [void][HallowPw]::PrintWindow($form.Handle, $dc, 2); $gg.ReleaseHdc($dc); $gg.Dispose()

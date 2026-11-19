@@ -9,6 +9,15 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.5
+- New Hallow tab: a card for each Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips) that
+  shows whether it's installed and running and whether a newer version is out. Open, Install and
+  Update get the newest release from GitHub (checksum checked) and install it for you only - no
+  admin. Updates are checked at most every 4 hours. The Hallow Mixer card moved here from Server.
+- Games > Game save backup: when Hallow Vault is installed it handles your saves - Back up saves
+  now offers to open Vault instead and the weekly toolkit backup skips itself. Your older toolkit
+  backups are kept.
+
 WHAT'S NEW IN 5.3
 - Phone dashboard: a Games section with your recent Hallow Hub games and a Play button for each
   (needs Hallow Hub 1.9 running; games start through Hub, so your Mixer preset and game session apply).

@@ -29,7 +29,7 @@ $Fa = @{
     'lock' = 0xf023; 'location-dot' = 0xf3c5; 'microphone' = 0xf130; 'camera' = 0xf030; 'clipboard' = 0xf328
     'comments' = 0xf086; 'link' = 0xf0c1; 'link-slash' = 0xf127; 'mobile-screen' = 0xf3cf
     'headphones' = 0xf025; 'truck-moving' = 0xf4df; 'wave-square' = 0xf83e
-    'circle-question' = 0xf059; 'cloud' = 0xf0c2; 'moon' = 0xf186; 'window-maximize' = 0xf2d0; 'hourglass-half' = 0xf252
+    'layer-group' = 0xf5fd; 'circle-question' = 0xf059; 'cloud' = 0xf0c2; 'moon' = 0xf186; 'window-maximize' = 0xf2d0; 'hourglass-half' = 0xf252
 }
 
 # Button title -> icon. First match wins, so specific words come before general ones.

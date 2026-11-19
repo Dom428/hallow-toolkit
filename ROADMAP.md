@@ -26,15 +26,12 @@
 | **5.1** | Modern look: rounded nav, dark title bar, new icons |
 | **5.2** | Game session modes for Hallow Hub |
 | **5.3** | Start Hallow Hub games from the phone dashboard |
+| **5.5** | Hallow tab: install, open and update every Hallow app; save backups hand over to Hallow Vault |
 
 ## Next
 
-### 5.4 - Fixes from real use
+### Fixes from real use
 - Whatever comes up with the new look, game sessions from Hub and the phone dashboard
-
-### 5.5 - Hallow family page
-- One card per Hallow app (Mixer, Hub, Vault, Overlay, Remote, Clips): installed or not, running or not, update available, with Install / Open / Update
-- Save backups hands over to Hallow Vault when it's installed, so there aren't two backup tools fighting over the same saves
 
 ### 5.6 - Phone
 - Hallow Remote becomes the main phone app; the phone dashboard keeps working and points to it

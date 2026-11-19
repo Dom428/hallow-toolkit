@@ -314,29 +314,3 @@ Add-Tool $f 'Copy phone link' 'Send it to your phone' {
 } -Width 210 -Icon 'copy' | Out-Null
 Add-Tool $f 'New link' 'Old link stops working' { [void](New-DashToken); Log 'New dashboard link made - the old one no longer works. Click Copy phone link.' } -Width 210 -Icon 'rotate' | Out-Null
 [void]$script:AfterShown.Add({ Update-DashNote })
-
-# ================================================================ HALLOW MIXER (v4.5)
-Add-Section $f 'Hallow Mixer - per-app volume mixer (a free Sonar alternative)' 'sliders'
-$mixerNote = Add-Note $f ''
-$mixerNote.Height = 36
-function Update-MixerNote {
-    $installed = Test-Path $MixerExe
-    $ver = if ($installed) { (Get-Item $MixerExe).VersionInfo.ProductVersion -replace '\.0\.0$', '' }
-    $running = [bool](Get-MixerApi) -and [bool](Get-Process HallowMixer -ErrorAction SilentlyContinue)
-    $mixerNote.Text = $(if (-not $installed) { 'Game, chat, music and media on their own faders; ducking when friends talk; EQ, push-to-talk and an OBS stream mix. Free and open source - Install gets the newest release from GitHub (checksum checked).' }
-        elseif ($running) { "Hallow Mixer $ver is installed and running - it updates itself. The phone dashboard shows its levels." }
-        else { "Hallow Mixer $ver is installed. Open it, or set it to start with Windows in its Settings." })
-}
-Add-Tool $f 'Install / Open' 'Hallow Mixer' {
-    if (Test-Path $MixerExe) { Start-Process explorer.exe "`"$MixerExe`""; Log 'Opening Hallow Mixer.'; return }   # Explorer starts it as you, not as admin
-    Log 'Getting Hallow Mixer from GitHub...'
-    Start-Background 'Hallow Mixer download' $MixerInstallWork @() {
-        param($o)
-        if (-not $o -or $o.Error) { Log "Hallow Mixer: $(if ($o) { $o.Error } else { 'download failed' })"; return }
-        Start-MixerInstaller $o.Installer
-        Log "Hallow Mixer $($o.Version) downloaded$(if ($o.Verified) { ' and checksum checked' }) - installing in a separate window; it opens when done."
-        Update-MixerNote
-    }
-} -Primary -Width 210 -Icon 'sliders' | Out-Null
-Add-Tool $f 'Project page' 'Source, changes, roadmap' { Start-Process 'https://github.com/Dom428/hallow-mixer' } -Width 210 -Icon 'arrow-up-right-from-square' | Out-Null
-[void]$script:AfterShown.Add({ Update-MixerNote })
