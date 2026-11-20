@@ -671,6 +671,7 @@ $DnsPresets = [ordered]@{ Cloudflare = @('1.1.1.1', '1.0.0.1'); Google = @('8.8.
 function Set-DnsPreset([string]$Name) {
     if (-not (Need-Admin 'Changing DNS')) { return }
     $a = Get-MainAdapter; if (-not $a) { Log 'No connected network adapter found.'; return }
+    try { Save-DnsUndo $a } catch { }   # v5.14: remember the old DNS for Undo
     if ($Name -eq 'Automatic' -or -not $DnsPresets.Contains($Name)) { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ResetServerAddresses; Log "DNS on $($a.Name) reset to automatic." }
     else { Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $DnsPresets[$Name]; Log "DNS on $($a.Name) set to $Name ($($DnsPresets[$Name] -join ', '))." }
     Clear-DnsClientCache

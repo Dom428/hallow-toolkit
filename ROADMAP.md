@@ -35,6 +35,7 @@
 | **5.11** | App updates with per-app Update and Ignore; startup impact |
 | **5.12** | System info page; Minimal / Gamer / Privacy tweak presets; browser cache and history clean-up |
 | **5.13** | Background restraint (ProBalance style) and IdleSaver, both opt-in |
+| **5.14** | Gamer tools: mouse report rate, keyboard tester, dead pixel and motion tests, ping graph + route, Undo DNS, max refresh rate with revert, shader caches, Windows gaming settings, verify files |
 
 ## Next
 

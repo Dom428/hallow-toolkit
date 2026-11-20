@@ -9,6 +9,36 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.14
+- Tools > Mouse report rate: move the mouse inside the window and see its polling rate (125 to
+  8000 Hz), reports per second and the best steady reading. Reads raw mouse input only while that
+  window is in front; nothing is saved.
+- Tools > Keyboard tester: every key lights up when it registers (left and right Shift/Ctrl/Alt,
+  numpad Enter too) and shows how many keys it takes at once - hold W, A, S, D, Shift and Space to
+  check for ghosting.
+- Tools > Dead pixel test: full-screen red, green, blue, white, black, grey... on the screen the
+  toolkit is on. Click or Space for the next colour, Esc to exit.
+- Tools > Motion & frame-skip test: moving blocks at three speeds plus a frame-skip row, and a live
+  "frames shown vs refresh rate" check that catches a screen running slower than it should.
+  Esc to exit.
+- Network > Ping graph & route: a live ping graph (loss, jitter, min/avg/max) to your router,
+  Cloudflare, Google, any address you type, or the game server Hallow Overlay reports (when its
+  "Hide the server's IP" is off). Route shows every hop on the way, so you can see where lag starts.
+  One small ping a second - fine to leave open while you play.
+- Network > Undo DNS change: puts the DNS back to what you had before the toolkit changed it
+  (Use Cloudflare DNS, Use fastest DNS or Reset DNS).
+- Gaming > Display refresh rate: every screen's resolution and refresh rate next to the fastest it
+  can do. Use max refresh rate switches the selected screen and asks "Keep these settings?" - if you
+  don't click Keep within 15 seconds (or the screen goes blank), it goes back by itself.
+- Gaming > Shader caches: NVIDIA, AMD, Intel and DirectX shader caches plus Steam's per-game
+  shader folders, with sizes. Clear ticked caches only while no game runs; drivers and games
+  rebuild them by themselves (the first match afterwards can load a little slower).
+- Gaming > Windows gaming settings: Game Mode, GPU scheduling, windowed-game optimizations,
+  variable refresh rate, Game Bar background recording, mouse acceleration, power plan and more,
+  with a tip for each and a button to the right Settings page. Read-only - nothing is changed.
+- Games > Verify files: Steam checks and repairs the selected game in one click; for Epic, EA,
+  Ubisoft, Battle.net, Riot and Xbox it opens the launcher and says exactly where to click.
+
 WHAT'S NEW IN 5.13
 - Gaming > Background restraint (like Process Lasso's ProBalance, off until you turn it on): when
   a background app keeps using more than 15% of the CPU while a game runs (or at any time, if you

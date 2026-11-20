@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '5.13'
+$AppVersion = '5.14'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -531,6 +531,7 @@ function Set-GamingDns([bool]$Cloudflare) {
     if (-not (Need-Admin 'Changing DNS')) { return }
     $a = Get-MainAdapter
     if (-not $a) { Log 'No connected network adapter found.'; return }
+    try { Save-DnsUndo $a } catch { }   # v5.14: remember the old DNS for Undo
     if ($Cloudflare) {
         Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses @('1.1.1.1', '1.0.0.1')
         Log "DNS on $($a.Name) set to Cloudflare (1.1.1.1, 1.0.0.1)"
@@ -1228,6 +1229,7 @@ function Remove-LeftoverItems($Items) {
 . (Join-Path $HallowRoot 'HallowPreGame.ps1')
 . (Join-Path $HallowRoot 'HallowGameRules.ps1')
 . (Join-Path $HallowRoot 'HallowBalance.ps1')   # v5.13: background restraint, IdleSaver
+. (Join-Path $HallowRoot 'HallowGamerTools.ps1')   # v5.14: shader caches, gaming settings, display modes, input + motion tests, route, DNS undo
 . (Join-Path $HallowRoot 'HallowSysInfo.ps1')
 . (Join-Path $HallowRoot 'HallowDiag.ps1')
 . (Join-Path $HallowRoot 'HallowServer.ps1')
