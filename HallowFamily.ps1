@@ -1,8 +1,10 @@
 <#
-  Hallow Toolkit - the Hallow family apps (Mixer, Hub, Vault, Overlay, Remote, Clips): installed or not, running or
-  not, newer release on GitHub, and installing / updating them. No window code. Dot-sourced by HallowCore.ps1.
-  Each app installs per user (no admin) with its own installer from its own GitHub release; nothing is downloaded
-  until you click Install or Update.
+  Hallow Toolkit - the Hallow family apps (Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Guard, Assist, Shield):
+  installed or not, running or not, newer release on GitHub, and installing / updating them. No window code.
+  Dot-sourced by HallowCore.ps1. Each app installs per user (no admin) with its own installer from its own GitHub
+  release; nothing is downloaded until you click Install or Update. Hallow Shield (v5.15) is a browser extension, not
+  a program: the toolkit finds it in Chrome / Edge / Brave / Opera (read-only) and links to its release page and
+  install steps.
 #>
 
 $FamilyApps = @(
@@ -12,10 +14,63 @@ $FamilyApps = @(
     [pscustomobject]@{ Name = 'Overlay'; Icon = 'window-maximize'; Desc = 'See-through stats panel over your games, anti-cheat safe' }
     [pscustomobject]@{ Name = 'Remote';  Icon = 'mobile-screen';   Desc = 'Your phone as a remote for Mixer, Hub and the toolkit' }
     [pscustomobject]@{ Name = 'Clips';   Icon = 'film';            Desc = 'Instant replay: Ctrl+Alt+S saves the last moments of your game' }
+    [pscustomobject]@{ Name = 'Keys';    Icon = 'key';             Desc = 'Password manager that stays on your PC, with your phone as a key' }
+    [pscustomobject]@{ Name = 'Guard';   Icon = 'shield-halved';   Desc = 'Safety center on top of Microsoft Defender: scans, score and tips' }
+    [pscustomobject]@{ Name = 'Assist';  Icon = 'handshake-angle'; Desc = 'Remote help: let a friend see and fix your PC, only when you say so' }
+    [pscustomobject]@{ Name = 'Shield';  Icon = 'puzzle-piece';    Desc = 'Browser extension: blocks ads, trackers, YouTube ads and cookie banners'; Kind = 'Extension' }
 )
 function Get-FamilyExe([string]$App) { Join-Path $env:LOCALAPPDATA "Programs\Hallow $App\Hallow$App.exe" }
 function Get-FamilyRepo([string]$App) { "Dom428/hallow-$($App.ToLower())" }
-function Test-FamilyInstalled([string]$App) { Test-Path (Get-FamilyExe $App) }
+function Test-FamilyExtension([string]$App) { [bool](@($FamilyApps | Where-Object { $_.Name -eq $App -and $_.Kind -eq 'Extension' }).Count) }
+function Test-FamilyInstalled([string]$App) { if (Test-FamilyExtension $App) { return [bool](@(Find-ShieldInstall).Count) }; Test-Path (Get-FamilyExe $App) }
+$ShieldReleaseUrl = 'https://github.com/Dom428/hallow-shield/releases/latest'
+$ShieldStepsUrl = 'https://github.com/Dom428/hallow-shield#install'
+
+# ---- Hallow Shield (v5.15): loaded as an unpacked extension in a Chromium browser? Reads each profile's
+# (Secure) Preferences - extensions loaded from a folder (location 4 = unpacked, 8 = command line) whose manifest.json is
+# named "Hallow Shield". Read-only; nothing else from the browser is looked at or kept. Firefox only loads it as a
+# temporary add-on (gone after a restart), so it isn't looked for there. Self-contained (link check runspace).
+$ShieldFindWork = {
+    param([string]$Local, [string]$Roaming)
+    if (-not $Roaming) { $Roaming = [Environment]::GetFolderPath('ApplicationData') }
+    $roots = [ordered]@{ 'Chrome' = (Join-Path $Local 'Google\Chrome\User Data'); 'Edge' = (Join-Path $Local 'Microsoft\Edge\User Data')
+        'Brave' = (Join-Path $Local 'BraveSoftware\Brave-Browser\User Data'); 'Opera' = (Join-Path $Roaming 'Opera Software\Opera Stable') }
+    $found = @{}
+    foreach ($b in @($roots.Keys)) {
+        $root = $roots[$b]
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $profiles = if ($b -eq 'Opera') { @(Get-Item -LiteralPath $root) } else { @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'Default' -or $_.Name -like 'Profile *' }) }
+        foreach ($p in $profiles) {
+            foreach ($fn in 'Secure Preferences', 'Preferences') {
+                $file = Join-Path $p.FullName $fn
+                if (-not (Test-Path -LiteralPath $file)) { continue }
+                $j = $null; try { $j = [IO.File]::ReadAllText($file) | ConvertFrom-Json } catch { continue }
+                $set = $null; try { $set = $j.extensions.settings } catch { }
+                if (-not $set) { continue }
+                foreach ($e in $set.PSObject.Properties) {
+                    $v = $e.Value
+                    if (-not $v -or ($v.location -ne 4 -and $v.location -ne 8) -or -not $v.path) { continue }
+                    $mf = Join-Path "$($v.path)" 'manifest.json'
+                    if (-not (Test-Path -LiteralPath $mf)) { continue }
+                    $m = $null; try { $m = [IO.File]::ReadAllText($mf) | ConvertFrom-Json } catch { continue }
+                    if ("$($m.name)" -ne 'Hallow Shield') { continue }
+                    $key = "$b|$($p.Name)"; if ($found.ContainsKey($key)) { continue }
+                    $off = $false
+                    if ($v.PSObject.Properties.Name -contains 'disable_reasons' -and $v.disable_reasons) { $off = @($v.disable_reasons | Where-Object { $_ }).Count -gt 0 }
+                    if ($v.PSObject.Properties.Name -contains 'state' -and $v.state -eq 0) { $off = $true }
+                    $found[$key] = [pscustomobject]@{ Browser = $b; Profile = $p.Name; Path = "$($v.path)"; Version = "$($m.version)"; Enabled = -not $off }
+                }
+            }
+        }
+    }
+    @($found.Values | Sort-Object Browser, Profile)
+}
+function Find-ShieldInstall([string]$Local = $env:LOCALAPPDATA, [string]$Roaming = $env:APPDATA) { @(& $ShieldFindWork $Local $Roaming) }
+# what every link check (page, tray, snapshots) is given
+function Get-LinkCheckOptions {
+    $fc = Get-FamilyCache
+    @{ ToolkitCrashDir = $CrashDir; ShieldFind = $ShieldFindWork.ToString(); ShieldLatest = $(if ($fc -and $fc.latest) { "$($fc.latest.Shield)" } else { '' }) }
+}
 # "v3.12", "3.12.0.0" -> [version] 3.12.0.0 (so tags and file versions compare); $null when there is no number
 function ConvertTo-FamilyVersion([string]$Text) {
     $m = [regex]::Match("$Text", '\d+(\.\d+){0,3}')
@@ -70,13 +125,19 @@ function Get-FamilyStatus {
     $fc = Get-FamilyCache
     foreach ($a in $FamilyApps) {
         $exe = Get-FamilyExe $a.Name
-        $installed = Test-Path $exe
-        $ver = $null; if ($installed) { try { $ver = ConvertTo-FamilyVersion (Get-Item $exe).VersionInfo.FileVersion } catch { } }
+        $where = $null
+        if ($a.Kind -eq 'Extension') {
+            $sh = @(Find-ShieldInstall); $installed = [bool]$sh.Count; $exe = $null; $ver = $null
+            if ($installed) { $ver = @($sh | ForEach-Object { ConvertTo-FamilyVersion $_.Version } | Sort-Object -Descending)[0]; $where = (@($sh | ForEach-Object Browser | Select-Object -Unique) -join ', ') }
+        } else {
+            $installed = Test-Path $exe
+            $ver = $null; if ($installed) { try { $ver = ConvertTo-FamilyVersion (Get-Item $exe).VersionInfo.FileVersion } catch { } }
+        }
         $latest = $null; if ($fc -and $fc.latest) { $latest = ConvertTo-FamilyVersion "$($fc.latest.($a.Name))" }
         [pscustomobject]@{
-            Name = $a.Name; Title = "Hallow $($a.Name)"; Icon = $a.Icon; Desc = $a.Desc; Exe = $exe
+            Name = $a.Name; Title = "Hallow $($a.Name)"; Icon = $a.Icon; Desc = $a.Desc; Exe = $exe; Kind = "$($a.Kind)"; Where = $where
             Installed = $installed; Version = $ver; Latest = $latest
-            Running = [bool](Get-Process "Hallow$($a.Name)" -ErrorAction SilentlyContinue)
+            Running = [bool]($a.Kind -ne 'Extension' -and (Get-Process "Hallow$($a.Name)" -ErrorAction SilentlyContinue))
             Update = [bool]($installed -and $ver -and $latest -and $latest -gt $ver)
         }
     }
@@ -155,6 +216,20 @@ $FamilyLinkCheckWork = {
         try { $lc = [datetime]::Parse("$($Status.lastCrash)") } catch { return }
         if (((Get-Date) - $lc).TotalDays -lt 7) { Add-Line $App 'Crash' 'warn' ("Crashed {0:ddd d MMM h:mm tt}" -f $lc) 'crash' }
     }
+    # v5.15: Hallow Shield is a browser extension - found through the browsers' own extension list (read-only)
+    if ($Apps -contains 'Shield' -and ($Opt.ShieldFind -or $Opt.Shield)) {
+        $sh = @()
+        if ($Opt.Shield) { $sh = @($Opt.Shield) }   # tests
+        else { try { $sh = @(& ([scriptblock]::Create($Opt.ShieldFind)) $local $roam) } catch { } }
+        if ($sh.Count) {
+            $on = @($sh | Where-Object { $_.Enabled }); $offs = @($sh | Where-Object { -not $_.Enabled })
+            if ($on.Count) { Add-Line 'Shield' 'Browser' 'good' ('Loaded in {0} (v{1})' -f (@($on | ForEach-Object { if ($_.Profile -and $_.Profile -ne 'Default' -and $_.Browser -ne 'Opera') { "$($_.Browser) ($($_.Profile))" } else { $_.Browser } } | Select-Object -Unique) -join ', '), (@($on | ForEach-Object Version | Sort-Object -Descending)[0])) $null }
+            if ($offs.Count) { Add-Line 'Shield' 'Browser' 'warn' ('Turned off in {0} - switch it back on in the browser''s Extensions page' -f (@($offs | ForEach-Object Browser | Select-Object -Unique) -join ', ')) 'shieldsteps' }
+            $lt = $null; if ($Opt.ShieldLatest) { $lt = Ver $Opt.ShieldLatest }
+            $have = @($sh | ForEach-Object { Ver $_.Version } | Where-Object { $_ } | Sort-Object -Descending)[0]
+            if ($lt -and $have -and $lt -gt $have) { Add-Line 'Shield' 'Update' 'warn' ("Version $(Short $lt) is out (you have $(Short $have)) - unzip it over the same folder, then click reload on Shield's card") 'shieldrelease' }
+        }
+    }
     if ($Opt.ToolkitCrashDir -and (Test-Path $Opt.ToolkitCrashDir)) {
         $tc = Get-ChildItem $Opt.ToolkitCrashDir -Filter '*.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
         if ($tc) { Test-Crash 'Toolkit' ([pscustomobject]@{ lastCrash = $tc.LastWriteTime.ToString('s') }) }
@@ -210,6 +285,17 @@ $FamilyLinkCheckWork = {
                 else { Add-Line $a 'Mixer API' 'warn' "Mixer API doesn't answer - check its Settings" 'open' }
             }
         }
+        if ($a -eq 'Guard' -and $sj -and $sj.PSObject.Properties.Name -contains 'score' -and $null -ne $sj.score) {
+            # v5.15: Guard's safety score (Guard itself works out what to fix; the toolkit only shows it)
+            $sc = [int]$sj.score; $lab = "$($sj.scoreLabel)"
+            $txt = "Safety score $sc$(if ($lab) { " - $lab" })$(if ($sj.threats) { ", $($sj.threats) threat(s) in Defender's history" })"
+            if ($sc -ge 80) { Add-Line $a 'Safety' 'good' $txt $null } elseif ($sc -ge 50) { Add-Line $a 'Safety' 'warn' "$txt - open Guard to see what to fix" 'open' } else { Add-Line $a 'Safety' 'bad' "$txt - open Guard to see what to fix" 'open' }
+        }
+        if ($a -eq 'Assist' -and $sj) {
+            # v5.15: only whether someone is connected and whether unattended access is on
+            if ("$($sj.session)" -eq 'connected') { Add-Line $a 'Session' 'warn' $(if ($sj.helping) { 'You are helping someone right now' } else { 'Someone is connected to this PC right now - Disconnect in Assist if you did not expect it' }) 'open' }
+            if ($sj.unattended) { Add-Line $a 'Unattended access' 'warn' 'Unattended access is on - fine on your own PCs, turn it off on anyone else''s' 'open' }
+        }
         if ($a -eq 'Overlay') {
             # FPS and the game server come from Windows event tracing; a normal account needs the Performance Log Users group
             $st = $null; if (Test-Path $sf) { try { $st = Get-Content $sf -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json } catch { } }
@@ -237,6 +323,8 @@ $FamilyLinkCheckWork = {
 }
 # Fixes for a check line, run as you: start the app, or turn on its own Start with Windows value.
 function Invoke-FamilyFix([string]$App, [string]$Fix) {
+    if ($Fix -eq 'shieldsteps') { Start-Process $ShieldStepsUrl; return 'Opened Hallow Shield''s install steps (Extensions page, Developer mode, Load unpacked).' }
+    if ($Fix -eq 'shieldrelease') { Start-Process $ShieldReleaseUrl; return 'Opened the newest Hallow Shield release - download the zip for your browser and unzip it over the same folder.' }
     if ($Fix -eq 'crash') {   # open the newest crash report in Notepad
         $dir = if ($App -eq 'Toolkit') { $CrashDir } elseif ($App -eq 'Clips') { Join-Path $env:LOCALAPPDATA 'HallowClips\crashes' } else { Join-Path $env:APPDATA "Hallow$App\crashes" }
         $f = Get-ChildItem $dir -Filter '*.txt' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1

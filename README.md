@@ -14,6 +14,9 @@ The toolkit checks this repo for new releases when it opens and asks before it u
 - Quick Clean-up, health report, crash detective, RAM/SSD checks
 - Live monitor, game boost, game sessions, save backups, server ping
 - **Gamer tools:** mouse report rate and keyboard tester, dead pixel and motion / frame-skip tests, ping graph with route to a game server, max refresh rate with a 15-second revert, shader caches for every GPU and Steam game, Windows gaming settings at a glance, verify game files
+- **Game-ready check:** one button before you play - Game Mode, GPU scheduling, power plan, Xbox Game Bar captures (they fight Hallow Clips), apps already using the CPU / GPU, Discord hardware acceleration, full-screen optimizations, RAM, drive space and driver age; settings change only when you click a fix
+- **Driver check and drive health** (read-only): graphics, chipset, audio and network driver ages with the maker's page; drive wear, temperature and error counters plus how fast each drive is filling up
+- **Hallow family:** install, open, update and link-check Mixer, Hub, Vault, Overlay, Remote, Clips, Keys, Guard and Assist, and find the Hallow Shield browser extension in Chrome / Edge / Brave / Opera
 - **Per-game rules, background restraint and IdleSaver** (Process Lasso style, opt-in): priority, cores and power plan per game; background apps that hog the CPU lowered while you play (never games, audio/voice apps or Windows); a different power plan while you're away
 - Storage scans, disk map, Revo-style deep uninstall with leftovers scan
 - Tweaks, startup and services manager, dev toolbox

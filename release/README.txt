@@ -9,6 +9,25 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.15
+- Gaming > Game-ready check (was Pre-game check, also in the tray menu): besides restarts, RAM,
+  drive space, GPU / CPU, hogs, NVIDIA driver age and your Hallow apps, it now looks at Game Mode,
+  GPU scheduling (HAGS), the power plan, Xbox Game Bar captures (background recording costs FPS and
+  fights Hallow Clips for the video encoder), apps already using the CPU or GPU (a game that is
+  running is left out), Discord's hardware acceleration and full-screen optimizations. Read-only:
+  a setting changes only when you click its fix (Turn on Game Mode, Turn off Game Bar captures,
+  Use Balanced) and say yes. GPU scheduling and Discord get a link / the steps instead.
+- Health > Driver check: graphics, chipset, audio and network drivers with version, date and age,
+  and a button to the maker's driver page (NVIDIA, AMD, Intel or your board maker). Nothing is
+  downloaded - the Drivers tab and Windows Update still do that.
+- Health > Drive health: each drive's health, wear, temperature (and hottest seen), hours and
+  uncorrected errors, plus how fast each drive is filling up and roughly when it would be full.
+  The toolkit keeps one free-space reading per drive per day (disk-history.json, free space only).
+- Hallow tab: cards and Check links for Hallow Keys, Hallow Guard (its safety score) and Hallow
+  Assist (warns if someone is connected or unattended access is on - never any codes), and Hallow
+  Shield, the browser extension: found in Chrome, Edge, Brave or Opera (read-only), with buttons to
+  its install steps and newest release. The toolkit never installs browser extensions itself.
+
 WHAT'S NEW IN 5.14
 - Tools > Mouse report rate: move the mouse inside the window and see its polling rate (125 to
   8000 Hz), reports per second and the best steady reading. Reads raw mouse input only while that

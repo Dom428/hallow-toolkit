@@ -88,7 +88,7 @@ $miSession.Add_Click({
     Update-SessionItem
 })
 [void]$menu.Items.Add($miSession)
-$miPreGame = New-Object System.Windows.Forms.ToolStripMenuItem('Pre-game check')
+$miPreGame = New-Object System.Windows.Forms.ToolStripMenuItem('Game-ready check')
 $miPreGame.Add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$(Join-Path $HallowRoot 'HallowToolkit.ps1')`"", '-StartPage', 'Gaming', '-Run', 'PreGame') })
 [void]$menu.Items.Add($miPreGame)
 $miAudio = New-Object System.Windows.Forms.ToolStripMenuItem('Switch audio (speakers / headset)   Ctrl+Alt+Home')
@@ -194,7 +194,7 @@ function Start-TrayLinkCheck {
     if ("$($s.LastLinkCheck)" -eq $today) { return }
     if (-not @($FamilyApps | Where-Object { Test-FamilyInstalled $_.Name }).Count) { return }
     $s | Add-Member LastLinkCheck $today -Force; Save-Settings $s
-    $ps = [powershell]::Create(); [void]$ps.AddScript($FamilyLinkCheckWork.ToString()).AddArgument([string[]]@($FamilyApps | ForEach-Object Name)).AddArgument(@{ ToolkitCrashDir = $CrashDir })
+    $ps = [powershell]::Create(); [void]$ps.AddScript($FamilyLinkCheckWork.ToString()).AddArgument([string[]]@($FamilyApps | ForEach-Object Name)).AddArgument((Get-LinkCheckOptions))
     $script:LinkJob = @{ PS = $ps; H = $ps.BeginInvoke() }
 }
 function Complete-TrayLinkCheck {

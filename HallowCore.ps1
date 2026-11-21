@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '5.14'
+$AppVersion = '5.15'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -1230,6 +1230,7 @@ function Remove-LeftoverItems($Items) {
 . (Join-Path $HallowRoot 'HallowGameRules.ps1')
 . (Join-Path $HallowRoot 'HallowBalance.ps1')   # v5.13: background restraint, IdleSaver
 . (Join-Path $HallowRoot 'HallowGamerTools.ps1')   # v5.14: shader caches, gaming settings, display modes, input + motion tests, route, DNS undo
+. (Join-Path $HallowRoot 'HallowChecks.ps1')   # v5.15: game-ready check, driver check, disk health + space trends
 . (Join-Path $HallowRoot 'HallowSysInfo.ps1')
 . (Join-Path $HallowRoot 'HallowDiag.ps1')
 . (Join-Path $HallowRoot 'HallowServer.ps1')

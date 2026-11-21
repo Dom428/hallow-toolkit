@@ -701,8 +701,8 @@ Add-Section $f 'Memory (RAM)'
 Add-Tool $f 'Memory info' 'Speed, EXPO status, last test result' { Invoke-MemoryInfo } | Out-Null
 Add-Tool $f 'Run memory test' 'Windows Memory Diagnostic (on restart)' { Invoke-MemoryTest } | Out-Null
 Add-Section $f 'Drives & drivers'
-Add-Tool $f 'Drive health' 'SSD wear, temperature, errors' { Invoke-SsdHealth } | Out-Null
-Add-Tool $f 'Driver check' 'GPU, network, audio driver ages' { Invoke-DriverCheck } | Out-Null
+Add-Tool $f 'Drive health' 'Wear, temperature, errors, space trend' { Start-DiskHealthCheck } | Out-Null
+Add-Tool $f 'Driver check' 'GPU, chipset, audio, network driver ages' { Start-DriverAgeCheck } | Out-Null
 Add-Tool $f 'Get NVIDIA driver' 'Opens the NVIDIA app or website' {
     $app = Get-ChildItem 'C:\Program Files\NVIDIA Corporation\NVIDIA app' -Recurse -Filter 'NVIDIA app.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($app) { Start-Process $app.FullName; Log 'Opened the NVIDIA app - go to Drivers.' }
@@ -1253,6 +1253,7 @@ foreach ($l in $launchers) {
 . (Join-Path $PSScriptRoot 'HallowPreGamePage.ps1')   # v5.9: pre-game check (Gaming), scheduled clean-up (Tune-up)
 . (Join-Path $PSScriptRoot 'HallowGameRulesPage.ps1')   # v5.10: per-game rules (Gaming)
 . (Join-Path $PSScriptRoot 'HallowBalancePage.ps1')   # v5.13: background restraint, IdleSaver (Gaming)
+. (Join-Path $PSScriptRoot 'HallowChecksPage.ps1')   # v5.15: driver check + drive health rows (Health)
 . (Join-Path $PSScriptRoot 'HallowGamerToolsPage.ps1')   # v5.14: input + screen tests (Tools), ping graph + route, DNS undo (Network), refresh rate, shader caches, gaming settings (Gaming), verify files (Games)
 
 # ---- go

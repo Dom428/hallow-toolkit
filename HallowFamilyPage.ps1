@@ -55,12 +55,13 @@ foreach ($app in $FamilyApps) {
     $desc = New-FamilyLabel $card 16 46 394 20 (New-Font 9) $C.Muted
     $desc.Text = $app.Desc
     $ver = New-FamilyLabel $card 16 68 394 20 (New-Font 9) $C.Text
-    $b1 = Add-Tool $card 'Open' '' ([scriptblock]::Create("Invoke-FamilyMain '$($app.Name)'")) -Primary -Width 122 -Icon 'play'
+    $b1 = Add-Tool $card $(if ($app.Kind -eq 'Extension') { 'Install steps' } else { 'Open' }) '' ([scriptblock]::Create("Invoke-FamilyMain '$($app.Name)'")) -Primary -Width 122 -Icon 'play'
     $b2 = Add-Tool $card 'Update' '' ([scriptblock]::Create("Invoke-FamilyInstall '$($app.Name)'")) -Width 122 -Icon 'arrows-rotate'
     $b3 = Add-Tool $card 'GitHub' '' ([scriptblock]::Create("Start-Process 'https://github.com/$(Get-FamilyRepo $app.Name)'")) -Width 122 -Icon 'arrow-up-right-from-square'
     $x = 16
     foreach ($b in $b1, $b2, $b3) { $b.Size = New-Object System.Drawing.Size(122, 42); $b.Location = New-Object System.Drawing.Point($x, 94); $x += 132 }
     $tips.SetToolTip($b3, "Source, changes and roadmap of Hallow $($app.Name)")
+    if ($app.Kind -eq 'Extension') { $tips.SetToolTip($b1, 'How to add it to Chrome, Edge, Brave, Opera or Firefox (opens its README)'); $tips.SetToolTip($b2, 'Opens the newest release - download the zip for your browser') }
     $script:FamilyCards[$app.Name] = @{ State = $state; Ver = $ver; Main = $b1; Update = $b2; Page = $b3 }
 }
 $f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
@@ -114,7 +115,7 @@ $linkRows.Text = 'Link results'   # not shown (lets snapshots scroll here)
 $linkRows.FlowDirection = 'TopDown'; $linkRows.WrapContents = $false; $linkRows.AutoSize = $true; $linkRows.AutoSizeMode = 'GrowAndShrink'
 $linkRows.MinimumSize = New-Object System.Drawing.Size(860, 0); $linkRows.Margin = New-Object System.Windows.Forms.Padding(0, 0, 0, 10)
 $f.Controls.Add($linkRows); $f.SetFlowBreak($linkRows, $true)
-$FixTitles = @{ start = 'Start it'; autostart = 'Turn on Start with Windows'; open = 'Open settings'; crash = 'Show' }
+$FixTitles = @{ start = 'Start it'; autostart = 'Turn on Start with Windows'; open = 'Open settings'; crash = 'Show'; shieldsteps = 'Install steps'; shieldrelease = 'Newest release' }
 # Rows: Title, Level (good / warn / bad), FixTitle, FixIcon, FixCode (PowerShell run when its button is clicked)
 function Show-CheckRows($Panel, $Rows) {
     foreach ($oldRow in @($Panel.Controls)) { foreach ($b in @($oldRow.Controls | Where-Object { $_ -is [System.Windows.Forms.Button] })) { [void]$allButtons.Remove($b) }; $oldRow.Dispose() }
@@ -143,12 +144,12 @@ function Show-LinkResults($Lines) {
     $rows = foreach ($l in @($Lines | Where-Object { $_.Level })) {
         $fix = $(if ($l.Fix -and $FixTitles[$l.Fix]) { $l.Fix })
         [pscustomobject]@{ Title = "Hallow $($l.App) - $($l.Text)"; Level = $l.Level; FixTitle = $(if ($fix) { $FixTitles[$fix] })
-            FixIcon = $(switch ($fix) { 'start' { 'play' } 'autostart' { 'power-off' } 'crash' { 'file-lines' } default { 'gear' } })
+            FixIcon = $(switch ($fix) { 'start' { 'play' } 'autostart' { 'power-off' } 'crash' { 'file-lines' } 'shieldsteps' { 'book' } 'shieldrelease' { 'arrow-up-right-from-square' } default { 'gear' } })
             FixCode = $(if ($fix) { "Log (Invoke-FamilyFix '$($l.App)' '$fix'); Start-LinkCheck" }) }
     }
     Show-CheckRows $linkRows @($rows)
 }function Start-LinkCheck {
-    Start-Background 'Check links' $FamilyLinkCheckWork @([string[]]@($FamilyApps | ForEach-Object Name), @{ ToolkitCrashDir = $CrashDir }) {
+    Start-Background 'Check links' $FamilyLinkCheckWork @([string[]]@($FamilyApps | ForEach-Object Name), (Get-LinkCheckOptions)) {
         param($o)
         $lines = @($o | Where-Object { $_.Level })
         Show-LinkResults $lines
@@ -163,6 +164,17 @@ function Update-FamilyCards {
         $(if ($fc -and $fc.checked) { try { 'Updates checked {0:ddd h:mm tt}.' -f [datetime]::Parse("$($fc.checked)") } catch { '' } } else { 'Checking for updates...' })
     foreach ($s in @(Get-FamilyStatus)) {
         $k = $script:FamilyCards[$s.Name]; if (-not $k) { continue }
+        if ($s.Kind -eq 'Extension') {   # v5.15: Hallow Shield - a browser extension, found in the browsers' extension lists
+            $v = Format-FamilyVersion $s.Version; $l = Format-FamilyVersion $s.Latest
+            $k.State.Text = $(if ($s.Installed) { "In $($s.Where)" } else { 'Not found' }); $k.State.ForeColor = $(if ($s.Installed) { $C.Good } else { $C.Muted })
+            if (-not $s.Installed) { $k.Ver.Text = 'Not in Chrome, Edge, Brave or Opera' + $(if ($l) { " - newest is $l" } else { '' }) + ' (Firefox: temporary add-on)'; $k.Ver.ForeColor = $C.Muted }
+            elseif ($s.Update) { $k.Ver.Text = "Version $v - $l is out: unzip it over the same folder, then reload"; $k.Ver.ForeColor = $C.Warn }
+            else { $k.Ver.Text = "Version $v" + $(if ($l) { ' - up to date' } else { '' }); $k.Ver.ForeColor = $C.Text }
+            Set-FamilyButton $k.Main 'Install steps' 'book' (-not $s.Update)
+            Set-FamilyButton $k.Update $(if ($s.Installed) { 'Get update' } else { 'Download' }) 'download' $true
+            $k.Update.Visible = (-not $s.Installed -or $s.Update); $k.Page.Left = $(if ($k.Update.Visible) { 280 } else { 148 })
+            continue
+        }
         $busy = $script:FamilyBusy[$s.Name]
         if ($busy) { $k.State.Text = $busy; $k.State.ForeColor = $C.Warn }
         elseif ($s.Running) { $k.State.Text = 'Running'; $k.State.ForeColor = $C.Good }
@@ -178,10 +190,12 @@ function Update-FamilyCards {
     }
 }
 function Invoke-FamilyMain([string]$App) {
+    if (Test-FamilyExtension $App) { Start-Process $ShieldStepsUrl; Log "Opened Hallow $App's install steps: unzip it into a folder of its own, then the browser's Extensions page > Developer mode > Load unpacked."; return }
     if (Open-FamilyApp $App) { Log "Opening Hallow $App."; return }
     Invoke-FamilyInstall $App
 }
 function Invoke-FamilyInstall([string]$App) {
+    if (Test-FamilyExtension $App) { Start-Process $ShieldReleaseUrl; Log "Opened the newest Hallow $App release - download the zip for your browser (the toolkit never installs browser extensions itself)."; return }
     if ($script:FamilyBusy[$App]) { Log "Hallow $App is already downloading."; return }
     $running = [bool](Get-Process "Hallow$App" -ErrorAction SilentlyContinue)
     if ($running -and -not (Confirm-Action "Update Hallow $App?`n`nIt closes for a moment while the new version installs, then opens again.")) { return }
@@ -226,4 +240,4 @@ $famTimer.Add_Tick({
 })
 $famTimer.Start()
 $form.Add_FormClosing({ $famTimer.Stop() })
-$script:PageShowHooks['Hallow'] = { Update-FamilyCards; Start-FamilyUpdateCheck; if ($env:HALLOW_SNAP) { Show-LinkResults (& $FamilyLinkCheckWork ([string[]]@($FamilyApps | ForEach-Object Name)) @{ ToolkitCrashDir = $CrashDir }) } elseif ($StartPage -eq 'Hallow') { Start-LinkCheck } }   # opened from the tray's link alert: check straight away
+$script:PageShowHooks['Hallow'] = { Update-FamilyCards; Start-FamilyUpdateCheck; if ($env:HALLOW_SNAP) { Show-LinkResults (& $FamilyLinkCheckWork ([string[]]@($FamilyApps | ForEach-Object Name)) (Get-LinkCheckOptions)) } elseif ($StartPage -eq 'Hallow') { Start-LinkCheck } }   # opened from the tray's link alert: check straight away

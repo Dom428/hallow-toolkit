@@ -6,9 +6,9 @@
 # ================================================================ GAMING: PRE-GAME CHECK (at the top of the page)
 $f = $script:PageFlows['Gaming']
 $n0 = $f.Controls.Count
-Add-Section $f 'Pre-game check' 'clipboard-check'
-(Add-Note $f 'A quick read-only look before you play: restarts waiting, app updates, RAM, game drive space, GPU / CPU, background hogs, NVIDIA driver age and your Hallow apps. Nothing changes until you click a fix.').Height = 36
-Add-Tool $f 'Pre-game check' 'Is the PC ready to play?' { Start-PreGameCheck } -Primary -Icon 'clipboard-check' | Out-Null
+Add-Section $f 'Game-ready check' 'flag-checkered'
+(Add-Note $f 'A read-only look before you play: restarts waiting, app updates, RAM, drive space, GPU / CPU and what is already using them, Game Mode, GPU scheduling, power plan, Xbox Game Bar captures, Discord, full-screen optimizations, NVIDIA driver age and your Hallow apps. Nothing changes until you click a fix.').Height = 52
+Add-Tool $f 'Game-ready check' 'Is the PC ready to play?' { Start-PreGameCheck } -Primary -Icon 'flag-checkered' | Out-Null
 $f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
 $preRows = New-Object System.Windows.Forms.FlowLayoutPanel
 $preRows.Text = 'Pre-game results'; $preRows.FlowDirection = 'TopDown'; $preRows.WrapContents = $false; $preRows.AutoSize = $true; $preRows.AutoSizeMode = 'GrowAndShrink'
@@ -26,6 +26,21 @@ $PreGameFixes = @{
     nvidia     = @('NVIDIA drivers page', 'arrow-up-right-from-square', "Start-Process 'https://www.nvidia.com/en-us/drivers/'")
     taskmgr    = @("What's using it", 'list-check', 'Start-Process taskmgr.exe')
     start      = @('Start it', 'play', 'Log (Invoke-FamilyFix ''{0}'' ''start'')')
+    gamemode   = @('Turn on Game Mode', 'toggle-on', 'Invoke-GameReadyFix gamemode')
+    gamebar    = @('Turn off Game Bar captures', 'toggle-on', 'Invoke-GameReadyFix gamebar')
+    power      = @('Use Balanced', 'bolt', 'Invoke-GameReadyFix power')
+    hags       = @('Open graphics settings', 'gear', "Start-Process 'ms-settings:display-advancedgraphics'; Log 'Opened Settings > Display > Graphics: switch Hardware-accelerated GPU scheduling on, then restart.'")
+    discord    = @('How to change it', 'circle-info', 'Show-DiscordTip')
+}
+# v5.15: the game-ready fixes - each changes one setting, only after you say yes
+function Invoke-GameReadyFix([string]$What) {
+    $ask = @{ gamemode = 'Turn on Game Mode?'; power = "Switch the power plan to Balanced?`n`n(It's the right plan for most CPUs; Ryzen and recent Intel boost fully on it.)"
+        gamebar = "Turn off Xbox Game Bar captures?`n`nBackground recording and Win+Alt+R stop; the Game Bar itself still opens with Win+G. Hallow Clips keeps doing instant replay. You can turn them back on in Settings > Gaming > Captures." }
+    if (-not (Confirm-Action $ask[$What])) { return }
+    try { Log (Set-GameReadySetting $What) } catch { Log "Could not change it: $($_.Exception.Message)" }
+}
+function Show-DiscordTip {
+    Log 'Discord: User Settings (the gear) > Advanced > Hardware Acceleration - turn it off and let Discord restart. The in-game overlay is under Game Overlay. The toolkit never edits Discord''s own files.'
 }
 function Close-PreGameHogs {
     $names = @("$($script:PreGameHogs)" -split ',' | Where-Object { $_ })
@@ -43,12 +58,12 @@ function Show-PreGameResults($Lines) {
 }
 # -Quick (after a fix): skips the slow winget list
 function Start-PreGameCheck([switch]$Quick) {
-    Start-Background 'Pre-game check' $PreGameWork @(, (Get-PreGameOptions -NoWinget:$Quick)) {
+    Start-Background 'Game-ready check' $PreGameWork @(, (Get-PreGameOptions -NoWinget:$Quick)) {
         param($o)
         $lines = @($o | Where-Object { $_.Level })
         Show-PreGameResults $lines
         $warn = @($lines | Where-Object Level -ne 'good').Count
-        Log $(if ($warn) { "Pre-game check: $warn thing(s) worth a look - see the Gaming tab." } else { 'Pre-game check: all good - have fun.' })
+        Log $(if ($warn) { "Game-ready check: $warn thing(s) worth a look - see the Gaming tab." } else { 'Game-ready check: all good - have fun.' })
     }
 }
 if ($Run -eq 'PreGame') {   # from the tray menu (snapshots: run it at once, without the slow winget list)

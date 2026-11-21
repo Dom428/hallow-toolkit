@@ -31,6 +31,7 @@ $Fa = @{
     'headphones' = 0xf025; 'truck-moving' = 0xf4df; 'wave-square' = 0xf83e
     'layer-group' = 0xf5fd; 'circle-question' = 0xf059; 'cloud' = 0xf0c2; 'moon' = 0xf186; 'window-maximize' = 0xf2d0; 'hourglass-half' = 0xf252
     'crosshairs' = 0xf05b; 'route' = 0xf4d7; 'toggle-on' = 0xf205; 'palette' = 0xf53f; 'tv' = 0xf26c; 'check-double' = 0xf560
+    'key' = 0xf084; 'handshake-angle' = 0xf4c4; 'puzzle-piece' = 0xf12e; 'chart-area' = 0xf1fe; 'flag-checkered' = 0xf11e
 }
 
 # Button title -> icon. First match wins, so specific words come before general ones.

@@ -73,6 +73,8 @@ $PreGameWork = {
             if ($run) { Add-Line 'overlay' 'good' 'Hallow Overlay is running' $null $null } else { Add-Line 'overlay' 'warn' "Hallow Overlay isn't running - no FPS / temps over the game" 'start' 'Overlay' }
         }
     }
+    # v5.15: game-ready settings - Game Mode, HAGS, power plan, Game Bar captures, busy background apps, Discord, FSO
+    if ($Opt.GameReadyWork) { try { foreach ($l in @(& ([scriptblock]::Create($Opt.GameReadyWork)) $Opt.GameReady)) { if ($l.Level) { [void]$out.Add($l) } } } catch { } }
     # app updates (winget, read-only list) - last because it's the slowest
     if ($Opt.WingetWork) {
         try {
@@ -93,6 +95,7 @@ function Get-PreGameOptions([switch]$NoWinget) {
         GameDrives = @(Get-GameDrives); NvSmi = $NvSmi; Local = $env:LOCALAPPDATA; Ignored = @((Get-Settings).IgnoredUpdates | Where-Object { $_ })
         Hogs = @(@($BackgroundHogs) + @((Get-Settings).BoostApps) | Where-Object { $_ } | Select-Object -Unique)
         Hallow = @('Overlay', 'Clips' | Where-Object { Test-FamilyInstalled $_ })
+        GameReadyWork = $GameReadyWork.ToString(); GameReady = @{ Clips = (Test-FamilyInstalled 'Clips'); GameProcs = @(Get-GameProcessNames) }
         WingetWork = $(if ($NoWinget -or -not (Get-Command winget -ErrorAction SilentlyContinue)) { '' } else { $WingetListWork.ToString() })
     }
 }

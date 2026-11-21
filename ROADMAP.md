@@ -36,6 +36,7 @@
 | **5.12** | System info page; Minimal / Gamer / Privacy tweak presets; browser cache and history clean-up |
 | **5.13** | Background restraint (ProBalance style) and IdleSaver, both opt-in |
 | **5.14** | Gamer tools: mouse report rate, keyboard tester, dead pixel and motion tests, ping graph + route, Undo DNS, max refresh rate with revert, shader caches, Windows gaming settings, verify files |
+| **5.15** | Game-ready check (Game Mode, HAGS, power plan, Game Bar vs Clips, busy apps, Discord, FSO) with fixes behind buttons; read-only driver check; drive health with space trends; Keys, Guard, Assist and the Shield extension on the Hallow tab and in Check links |
 
 ## Next
 
@@ -53,12 +54,17 @@ What those tools (and Ninite / UniGetUI, WinUtil, HWiNFO) do that the toolkit di
 - ProBalance - automatically lowering background apps that hog the CPU (Process Lasso) - **buildable**: 5.13, opt-in background restraint; never games, audio/voice apps, Windows, Hallow apps or the app in front
 - IdleSaver / power plan switch when you're away (Process Lasso) - **buildable**: 5.13, opt-in; never while a game runs or sound is playing
 - Live sensors for every voltage, fan and per-core temperature (HWiNFO) - **not here**: needs a kernel driver; the toolkit shows GPU via nvidia-smi and CPU temp through LibreHardwareMonitor if you install it
-- Raw SMART attributes for every drive (HWiNFO / CrystalDiskInfo) - **partly**: Windows only exposes health, wear, temperature and error counters (shown in 5.12)
+- Raw SMART attributes for every drive (HWiNFO / CrystalDiskInfo) - **partly**: Windows only exposes health, wear, temperature and error counters (shown in 5.12; 5.15 rates them green / amber / red and adds free-space trends)
 - Install tracing - log everything an installer changes so it can be undone exactly (Revo) - **not here**: needs file-system and registry monitoring while the installer runs; the toolkit's leftover scan covers most of it
 - Registry cleaner (CCleaner) - **not building**: little real benefit and a real risk of breaking apps
-- Driver updater for every device (CCleaner Pro) - **not here**: no safe public source; the toolkit uses Windows Update drivers and the board maker's (ASUS) list
+- Driver updater for every device (CCleaner Pro) - **not here**: no safe public source; the toolkit uses Windows Update drivers and the board maker's (ASUS) list. 5.15 adds a read-only driver check (graphics, chipset, audio and network driver ages with the maker's page)
+- Newest GPU driver version from NVIDIA / AMD / Intel (GeForce Experience style) - **later**: needs a lookup on the maker's site per card; the driver check judges by age for now
 - Scoop / Chocolatey / pip / npm sources (UniGetUI) - **not building**: winget covers the apps people install; the others need their own package managers
 - Windows ISO builder (WinUtil MicroWin) - **not here**: image servicing of a Windows ISO is a different tool
+
+### Hallow family
+- Keys, Guard, Assist and the Shield browser extension on the Hallow tab and in Check links - **done in 5.15**
+- Firefox: find Hallow Shield once it is signed on addons.mozilla.org (a temporary add-on leaves no trace to look for)
 
 ### Later
 - Drivers: fully automatic for MSI and Gigabyte boards, like ASUS today
