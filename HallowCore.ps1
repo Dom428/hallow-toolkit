@@ -3,7 +3,7 @@
 #>
 
 $AppName = 'Hallow Toolkit'
-$AppVersion = '5.15'
+$AppVersion = '5.16'
 $HallowRoot = $PSScriptRoot
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
     [Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -113,6 +113,7 @@ function Get-Settings {
         ServerAlerts    = $true
         Theme           = 'Orange'
         ThemeBase       = 'Hallow'
+        Look            = 'Hallow'
         MyApps          = @()
         GamePriority    = $true
     }

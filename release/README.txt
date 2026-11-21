@@ -9,6 +9,16 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.16
+- Light and dark mode. Hallow tab, next to the Hallow accent: Light / Dark / Same as Windows. It is
+  saved in the shared theme.json, so every Hallow app switches straight away (no restart), unless
+  that app's own Settings > Look is set to Light or Dark. Same as Windows follows Windows' app
+  colour setting live (the toolkit only reads it, it never changes it).
+- Tools > Theme > Look: Follow Hallow (default), Light or Dark for the toolkit itself - applied
+  straight away. In light mode the accent is darkened for text so it stays readable; filled
+  buttons keep your real accent. The title bar and scrollbars follow too.
+- Changing the Hallow accent now keeps everything else in theme.json.
+
 WHAT'S NEW IN 5.15
 - Gaming > Game-ready check (was Pre-game check, also in the tray menu): besides restarts, RAM,
   drive space, GPU / CPU, hogs, NVIDIA driver age and your Hallow apps, it now looks at Game Mode,

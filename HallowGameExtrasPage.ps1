@@ -135,7 +135,7 @@ function Show-WifiPasswords {
     [void]$lv.Columns.Add('Network', 230); [void]$lv.Columns.Add('Password', 230); [void]$lv.Columns.Add('Security', 120)
     foreach ($r in $rows) { $li = New-Object System.Windows.Forms.ListViewItem($r.Network); [void]$li.SubItems.Add($r.Password); [void]$li.SubItems.Add("$($r.Security)"); [void]$lv.Items.Add($li) }
     $btn = New-Object System.Windows.Forms.Button
-    $btn.Text = 'Copy password'; $btn.Dock = 'Bottom'; $btn.Height = 40; $btn.FlatStyle = 'Flat'; $btn.BackColor = $C.Accent; $btn.ForeColor = $C.AccentText
+    $btn.Text = 'Copy password'; $btn.Dock = 'Bottom'; $btn.Height = 40; $btn.FlatStyle = 'Flat'; $btn.BackColor = $C.AccentFill; $btn.ForeColor = $C.AccentText
     $btn.Add_Click({ if ($lv.SelectedItems.Count) { [System.Windows.Forms.Clipboard]::SetText($lv.SelectedItems[0].SubItems[1].Text); $btn.Text = 'Copied!' } })
     $win.Controls.Add($lv); $win.Controls.Add($btn)
     Log "Showing $($rows.Count) saved Wi-Fi network(s). Passwords are only shown in that window, never saved to the log."

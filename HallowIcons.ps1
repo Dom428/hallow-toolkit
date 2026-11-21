@@ -29,7 +29,7 @@ $Fa = @{
     'lock' = 0xf023; 'location-dot' = 0xf3c5; 'microphone' = 0xf130; 'camera' = 0xf030; 'clipboard' = 0xf328
     'comments' = 0xf086; 'link' = 0xf0c1; 'link-slash' = 0xf127; 'mobile-screen' = 0xf3cf
     'headphones' = 0xf025; 'truck-moving' = 0xf4df; 'wave-square' = 0xf83e
-    'layer-group' = 0xf5fd; 'circle-question' = 0xf059; 'cloud' = 0xf0c2; 'moon' = 0xf186; 'window-maximize' = 0xf2d0; 'hourglass-half' = 0xf252
+    'layer-group' = 0xf5fd; 'circle-question' = 0xf059; 'cloud' = 0xf0c2; 'moon' = 0xf186; 'sun' = 0xf185; 'desktop' = 0xf390; 'window-maximize' = 0xf2d0; 'hourglass-half' = 0xf252
     'crosshairs' = 0xf05b; 'route' = 0xf4d7; 'toggle-on' = 0xf205; 'palette' = 0xf53f; 'tv' = 0xf26c; 'check-double' = 0xf560
     'key' = 0xf084; 'handshake-angle' = 0xf4c4; 'puzzle-piece' = 0xf12e; 'chart-area' = 0xf1fe; 'flag-checkered' = 0xf11e
 }
@@ -100,6 +100,7 @@ function Get-ToolIconName([string]$Title) {
 
 $script:IconFonts = $null
 $script:IconCache = @{}
+$script:IconMeta = @{}   # v5.16: bitmap -> name, colour, size, pad (so light / dark can redraw it)
 function Get-IconFamily {
     if ($null -eq $script:IconFonts) {
         $script:IconFonts = $false
@@ -137,6 +138,7 @@ function Get-Icon([string]$Name, [System.Drawing.Color]$Color, [int]$Size = 16, 
     $g.DrawString([char]::ConvertFromUtf32($Fa[$Name]), $font, $brush, (New-Object System.Drawing.RectangleF(0, 0, $Size, $Size)), $sf)
     $brush.Dispose(); $font.Dispose(); $sf.Dispose(); $g.Dispose()
     $script:IconCache[$key] = $bmp
+    $script:IconMeta[$bmp] = @($Name, $Color.ToArgb(), $Size, $PadRight)
     $bmp
 }
 

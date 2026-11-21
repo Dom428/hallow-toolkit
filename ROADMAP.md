@@ -37,6 +37,7 @@
 | **5.13** | Background restraint (ProBalance style) and IdleSaver, both opt-in |
 | **5.14** | Gamer tools: mouse report rate, keyboard tester, dead pixel and motion tests, ping graph + route, Undo DNS, max refresh rate with revert, shader caches, Windows gaming settings, verify files |
 | **5.15** | Game-ready check (Game Mode, HAGS, power plan, Game Bar vs Clips, busy apps, Discord, FSO) with fixes behind buttons; read-only driver check; drive health with space trends; Keys, Guard, Assist and the Shield extension on the Hallow tab and in Check links |
+| **5.16** | Light and dark mode: Light / Dark / Same as Windows for every Hallow app (theme.json mode, live), the toolkit's own Look override, live recolouring, darkened accent for text |
 
 ## Next
 

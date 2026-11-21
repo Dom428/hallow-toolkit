@@ -96,6 +96,7 @@ foreach ($k in @($HallowAccents.Keys) + 'Custom...') {
     } else {
         $hex = $HallowAccents[$k]; $col = ConvertFrom-HexColor $hex
         $b.Text = $k; $b.Tag = $hex; $b.BackColor = $col; $b.FlatAppearance.MouseOverBackColor = $col; $b.FlatAppearance.BorderColor = $C.Text
+        $b.AccessibleDescription = 'hallow-fixed'
         $b.ForeColor = $(if ((0.299 * $col.R + 0.587 * $col.G + 0.114 * $col.B) -lt 140) { [System.Drawing.Color]::White } else { RGB 20 12 4 })
         $b.Add_Click({ Set-AccentFromPicker "$($this.Tag)" })
         $script:AccentButtons += $b
@@ -104,6 +105,33 @@ foreach ($k in @($HallowAccents.Keys) + 'Custom...') {
 }
 $f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
 Update-AccentPicker
+
+# ---- v5.16: light / dark for all the Hallow apps (theme.json "mode")
+$modeNote = Add-Note $f ''
+$modeNote.Height = 36
+$script:ModeButtons = @()
+function Update-ModePicker {
+    $cur = Get-HallowMode
+    $win = $(if ($cur -eq 'system') { $wl = Get-WindowsAppsLight; " Windows is set to $(if ($wl) { 'light' } else { 'dark' }) right now." } else { '' })
+    $modeNote.Text = "Light or dark: $($HallowModes[$cur]).$win Every Hallow app switches straight away, unless its own Settings > Look is set to Light or Dark. The toolkit's own: Tools > Theme > Look."
+    foreach ($b in $script:ModeButtons) { $on = ("$($b.AccessibleName)" -eq $cur); $b.Text = $(if ($on) { "$($HallowModes[$b.AccessibleName])  (on)" } else { $HallowModes[$b.AccessibleName] }); $b.FlatAppearance.BorderSize = $(if ($on) { 3 } else { 1 }); $b.FlatAppearance.BorderColor = $(if ($on) { $C.Accent } else { $C.Grid }) }
+}
+function Set-ModeFromPicker([string]$Mode) {
+    try { Set-HallowMode $Mode } catch { Log "Could not save light / dark: $($_.Exception.Message)"; return }
+    [void](Update-ToolkitLook); Update-ModePicker; if (Get-Command Update-LookPicker -ErrorAction SilentlyContinue) { Update-LookPicker }
+    Log "Hallow apps: $($HallowModes[$Mode]) - they switch now."
+}
+foreach ($k in @($HallowModes.Keys)) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.UseMnemonic = $false; $b.FlatStyle = 'Flat'; $b.Size = New-Object System.Drawing.Size($(if ($k -eq 'system') { 170 } else { 110 }), 36); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 6, 8)
+    $b.Font = New-Font 9; $b.Cursor = [System.Windows.Forms.Cursors]::Hand; $b.AccessibleName = $k
+    $b.BackColor = $C.Panel; $b.ForeColor = $C.Text; $b.FlatAppearance.MouseOverBackColor = $C.PanelHi
+    if (Test-IconFont) { $b.Image = Get-Icon @{ light = 'sun'; dark = 'moon'; system = 'desktop' }[$k] $C.Accent 16; $b.ImageAlign = 'MiddleLeft'; $b.TextImageRelation = 'ImageBeforeText'; $b.Padding = New-Object System.Windows.Forms.Padding(8, 0, 4, 0) }
+    $b.Add_Click({ Set-ModeFromPicker "$($this.AccessibleName)" })
+    $f.Controls.Add($b); $script:ModeButtons += $b
+}
+$f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
+Update-ModePicker
 
 # ---- v5.7: Check links - is each app running, answering the others, starting with Windows...
 Add-Section $f 'Links between the apps' 'link'

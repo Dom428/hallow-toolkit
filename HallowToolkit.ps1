@@ -49,6 +49,7 @@ try { [System.Windows.Forms.Application]::SetUnhandledExceptionMode([System.Wind
 [System.Windows.Forms.Application]::add_ThreadException({ param($s, $e) Write-HallowCrash $e.Exception | Out-Null; Log "ERROR: $($e.Exception.Message)" })
 # v5.8: "Hallow Toolkit closed unexpectedly last time" - once per crash report
 function Show-CrashNotice {
+    if ($env:HALLOW_SNAP) { return }   # v5.16: never pop a dialog while rendering snapshots
     $f = Get-NewCrashReport; if (-not $f) { return }
     $s = Get-Settings; $s | Add-Member LastCrashShown $f.Name -Force; Save-Settings $s
     $d = New-Object System.Windows.Forms.Form
@@ -60,7 +61,7 @@ function Show-CrashNotice {
     $x = 18
     foreach ($b in @(@('Show details', { Start-Process notepad.exe "`"$($f.FullName)`"" }), @('Open folder', { Start-Process explorer.exe "`"$CrashDir`"" }), @('OK', $null))) {
         $btn = New-Object System.Windows.Forms.Button
-        $btn.Text = $b[0]; $btn.FlatStyle = 'Flat'; $btn.BackColor = $(if ($b[0] -eq 'OK') { $C.Accent } else { $C.PanelHi }); $btn.ForeColor = $(if ($b[0] -eq 'OK') { $C.AccentText } else { $C.Text })
+        $btn.Text = $b[0]; $btn.FlatStyle = 'Flat'; $btn.BackColor = $(if ($b[0] -eq 'OK') { $C.AccentFill } else { $C.PanelHi }); $btn.ForeColor = $(if ($b[0] -eq 'OK') { $C.AccentText } else { $C.Text })
         $btn.Size = New-Object System.Drawing.Size(128, 34); $btn.Location = New-Object System.Drawing.Point($x, 100); $x += 140
         $btn.Tag = $b[1]; $btn.Add_Click({ if ($this.Tag) { & $this.Tag }; $this.FindForm().Close() })
         $d.Controls.Add($btn); if ($b[0] -eq 'OK') { $d.AcceptButton = $btn }
@@ -98,11 +99,31 @@ if ("$($ts.Theme)" -eq 'Shared') {
     }
 }
 $tb = $ThemeBases["$($ts.ThemeBase)"]; if (-not $tb) { $tb = $ThemeBases['Hallow'] }
-$C = @{
-    Bg = $tb.Bg; Nav = $tb.Nav; Panel = $tb.Panel; PanelHi = $tb.PanelHi; Grid = $tb.Grid
-    Accent = $ta.Accent; AccentHover = $ta.Hover; AccentText = $accentText; Purple = $ta.Second
-    Text = RGB 236 232 244; Muted = $tb.Muted; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
+# v5.16: light or dark. Dark = the background picked above (unchanged). Light = the Hallow light palette; text and thin
+# lines use the accent darkened until it reads on white, filled buttons keep the real accent (AccentFill).
+function Get-ToolkitPalette([bool]$Light) {
+    if (-not $Light) {
+        return @{
+            Bg = $tb.Bg; Nav = $tb.Nav; Panel = $tb.Panel; PanelHi = $tb.PanelHi; Grid = $tb.Grid
+            Accent = $ta.Accent; AccentHover = $ta.Hover; AccentText = $accentText; Purple = $ta.Second
+            AccentFill = $ta.Accent; AccentFillHover = $ta.Hover
+            Text = RGB 236 232 244; Muted = $tb.Muted; Good = RGB 110 210 140; Warn = RGB 240 190 90; Bad = RGB 240 90 90
+            Line = [System.Drawing.Color]::FromArgb(70, $tb.Grid); LineHot = $tb.Grid; SwitchOff = RGB 88 86 100; Light = $false
+        }
+    }
+    $txt = Get-LightTextAccent $ta.Accent 4.5 (RGB 238 234 245); $fill = Get-LightAccentFill $ta.Accent
+    $fh = RGB ([int]($fill.R * 0.9)) ([int]($fill.G * 0.9)) ([int]($fill.B * 0.9))
+    @{
+        Bg = RGB 246 244 250; Nav = RGB 252 251 254; Panel = RGB 255 255 255; PanelHi = RGB 238 234 245; Grid = RGB 218 211 230
+        Accent = $txt; AccentHover = $txt; AccentText = (Get-AccentFillText $fill); Purple = RGB 122 92 192
+        AccentFill = $fill; AccentFillHover = $fh
+        Text = RGB 30 26 38; Muted = RGB 107 100 120; Good = RGB 27 122 68; Warn = RGB 143 91 0; Bad = RGB 194 51 63
+        Line = RGB 218 211 230; LineHot = RGB 189 179 207; SwitchOff = RGB 127 120 144; Light = $true
+    }
 }
+$script:LookLight = ((Resolve-HallowLook "$($ts.Look)" (Get-HallowMode)) -eq 'light')
+if ($env:HALLOW_LOOK -in 'light', 'dark') { $script:LookLight = ($env:HALLOW_LOOK -eq 'light') }   # developer snapshots only
+$C = Get-ToolkitPalette $script:LookLight
 function New-Font([float]$Size, [string]$Style = 'Regular', [string]$Family = 'Segoe UI') { New-Object System.Drawing.Font($Family, $Size, [System.Drawing.FontStyle]$Style) }
 # v5.1 look: rounded shapes, dark title bar and dark scrollbars
 function New-RoundPath([float]$X, [float]$Y, [float]$W, [float]$H, [float]$R) {
@@ -116,13 +137,14 @@ if (-not ('HallowDark' -as [type])) {
 [System.Runtime.InteropServices.DllImport("uxtheme.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] public static extern int SetWindowTheme(System.IntPtr h, string app, string id);
 '@
 }
-function Set-DarkChrome($Control) {
+function Set-DarkChrome($Control, [switch]$Live) {
     try {
-        if ($Control -is [System.Windows.Forms.Form]) { $v = 1; [void][HallowDark]::DwmSetWindowAttribute($Control.Handle, 20, [ref]$v, 4) }
+        if ($Live -and $script:LookLight -and $Control -is [System.Windows.Forms.UpDownBase]) { return }   # number boxes fail to paint when their dark theme is taken off live; they keep it until the toolkit reopens
+        if ($Control -is [System.Windows.Forms.Form]) { $v = $(if ($script:LookLight) { 0 } else { 1 }); [void][HallowDark]::DwmSetWindowAttribute($Control.Handle, 20, [ref]$v, 4) }
         elseif ($Control -is [System.Windows.Forms.ScrollableControl] -or $Control -is [System.Windows.Forms.TextBoxBase] -or $Control -is [System.Windows.Forms.ListView] -or $Control -is [System.Windows.Forms.ListBox]) {
-            [void][HallowDark]::SetWindowTheme($Control.Handle, 'DarkMode_Explorer', $null)
+            [void][HallowDark]::SetWindowTheme($Control.Handle, $(if (-not $script:LookLight) { 'DarkMode_Explorer' } elseif ($Control -is [System.Windows.Forms.ListView]) { 'Explorer' } else { [NullString]::Value }), $(if ($script:LookLight) { [NullString]::Value } else { $null }))   # light: NULL, NULL = the default theme ($null would pass "" and switch theming off); dark as before
         }
-        foreach ($c in $Control.Controls) { Set-DarkChrome $c }
+        foreach ($c in $Control.Controls) { Set-DarkChrome $c -Live:$Live }
     } catch { }
 }
 # Sidebar buttons: a rounded pill behind the open page, with an accent bar on its left.
@@ -324,7 +346,7 @@ function Draw-Switch($g, [int]$X, [int]$Y, [bool]$On, [switch]$Pending, [bool]$E
     $old = $g.SmoothingMode; $g.SmoothingMode = 'AntiAlias'
     $path = New-Object System.Drawing.Drawing2D.GraphicsPath
     $path.AddArc($X, $Y, $H, $H, 90, 180); $path.AddArc(($X + $W - $H), $Y, $H, $H, 270, 180); $path.CloseFigure()
-    $track = if ($On) { $C.Good } else { [System.Drawing.Color]::FromArgb(88, 86, 100) }
+    $track = if ($On) { $C.Good } else { $C.SwitchOff }
     if (-not $Enabled) { $track = [System.Drawing.Color]::FromArgb(140, $track) }
     $br = New-Object System.Drawing.SolidBrush($track); $g.FillPath($br, $path); $br.Dispose()
     if ($Pending) { $pen = New-Object System.Drawing.Pen($C.Warn, 2); $g.DrawPath($pen, $path); $pen.Dispose() }
@@ -345,13 +367,13 @@ $script:ToolPaint = {
     $g = $e.Graphics; $w = $s.Width; $h = $s.Height
     $prim = $script:PrimaryButtons.Contains($s)
     $hot = $s.Enabled -and $s.ClientRectangle.Contains($s.PointToClient([System.Windows.Forms.Cursor]::Position))
-    $bg = if ($prim) { if ($hot) { $C.AccentHover } else { $C.Accent } } else { if ($hot) { $C.PanelHi } else { $C.Panel } }
+    $bg = if ($prim) { if ($hot) { $C.AccentFillHover } else { $C.AccentFill } } else { if ($hot) { $C.PanelHi } else { $C.Panel } }
     # v5.1: rounded card with a hairline border
     $g.Clear($(if ($s.Parent) { $s.Parent.BackColor } else { $C.Bg }))
     $g.SmoothingMode = 'AntiAlias'
     $rp = New-RoundPath 0 0 ($w - 1) ($h - 1) 10
     $br = New-Object System.Drawing.SolidBrush($bg); $g.FillPath($br, $rp); $br.Dispose()
-    if (-not $prim) { $pen = New-Object System.Drawing.Pen($(if ($hot) { $C.Grid } else { [System.Drawing.Color]::FromArgb(70, $C.Grid) }), 1); $g.DrawPath($pen, $rp); $pen.Dispose() }
+    if (-not $prim) { $pen = New-Object System.Drawing.Pen($(if ($hot) { $C.LineHot } else { $C.Line }), 1); $g.DrawPath($pen, $rp); $pen.Dispose() }
     $rp.Dispose(); $g.SmoothingMode = 'Default'
     $x = 14
     if ($s.Image) {
@@ -390,9 +412,9 @@ function Add-Tool($Flow, [string]$Title, [string]$Desc, [scriptblock]$Action, [s
     if ($Primary) { [void]$script:PrimaryButtons.Add($b) }
     $b.Add_Paint($script:ToolPaint)
     $b.FlatStyle = 'Flat'; $b.FlatAppearance.BorderSize = 0
-    $b.BackColor = $(if ($Primary) { $C.Accent } else { $C.Panel })
+    $b.BackColor = $(if ($Primary) { $C.AccentFill } else { $C.Panel })
     $b.ForeColor = $(if ($Primary) { $C.AccentText } else { $C.Text })
-    $b.FlatAppearance.MouseOverBackColor = $(if ($Primary) { $C.AccentHover } else { $C.PanelHi })
+    $b.FlatAppearance.MouseOverBackColor = $(if ($Primary) { $C.AccentFillHover } else { $C.PanelHi })
     $b.Size = New-Object System.Drawing.Size($Width, 64)
     $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
     $b.TextAlign = 'MiddleLeft'; $b.Padding = New-Object System.Windows.Forms.Padding(12, 0, 6, 0)
@@ -554,7 +576,7 @@ function Add-Tile($Flow, [string]$Key, [string]$Title) {
     $bar = New-Object System.Windows.Forms.Panel
     $bar.Location = New-Object System.Drawing.Point(14, 98); $bar.Size = New-Object System.Drawing.Size(250, 6); $bar.BackColor = $C.PanelHi
     $fill = New-Object System.Windows.Forms.Panel
-    $fill.Location = New-Object System.Drawing.Point(0, 0); $fill.Size = New-Object System.Drawing.Size(0, 6); $fill.BackColor = $C.Accent
+    $fill.Location = New-Object System.Drawing.Point(0, 0); $fill.Size = New-Object System.Drawing.Size(0, 6); $fill.BackColor = $C.AccentFill
     $bar.Controls.Add($fill)
     $p.Controls.AddRange(@($t, $v, $sub, $bar))
     $Flow.Controls.Add($p)
@@ -565,7 +587,7 @@ function Set-Tile([string]$Key, [string]$Value, [string]$Sub, [double]$Pct, [dou
     $t.Value.Text = $Value; $t.Sub.Text = $Sub
     $pct = [math]::Max(0.0, [math]::Min(100.0, $Pct))
     $t.Fill.Width = [int](250 * $pct / 100)
-    $t.Fill.BackColor = $(if ($pct -ge $BadAt) { $C.Bad } elseif ($pct -ge $WarnAt) { $C.Warn } else { $C.Accent })
+    $t.Fill.BackColor = $(if ($pct -ge $BadAt) { $C.Bad } elseif ($pct -ge $WarnAt) { $C.Warn } else { $C.AccentFill })
 }
 Add-Section $f 'Performance'
 Add-Tile $f 'cpu' 'CPU load'
@@ -1146,7 +1168,7 @@ Add-Tool $f 'Copy my PC specs' 'For Discord, forums, support' { Copy-Specs } -Pr
 Add-Tool $f 'Open log folder' 'Every action is logged' { Start-Process explorer.exe $LogDir } | Out-Null
 Add-Tool $f 'Install CPU temp sensor' 'LibreHardwareMonitor (free, winget)' { Install-Lhm } | Out-Null
 
-Add-Section $f 'Theme (saved - the window reopens to apply it)' 'star'
+Add-Section $f 'Theme (saved - the window reopens to apply it; Look applies straight away)' 'star'
 function Set-Theme([string]$Key, [string]$Value) {
     if ($script:Jobs.Count) { Log "Wait for '$($script:Jobs[0].Name)' to finish, then pick the theme again."; return }
     $s = Get-Settings; $s | Add-Member -NotePropertyName $Key -NotePropertyValue $Value -Force; Save-Settings $s
@@ -1163,23 +1185,48 @@ function Add-Swatch($Flow, [string]$Text, $Back, $Fore, $Border, [bool]$On, [scr
     $b.Size = New-Object System.Drawing.Size(132, 40); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10)
     $b.Font = New-Font 9.5 $(if ($On) { 'Bold' } else { 'Regular' }); $b.Cursor = [System.Windows.Forms.Cursors]::Hand
     $b.Tag = $Click; $b.Add_Click({ & $this.Tag })
+    $b.AccessibleDescription = 'hallow-fixed'   # a colour sample: keeps its colours when light / dark changes
     $Flow.Controls.Add($b); if ($Break) { $Flow.SetFlowBreak($b, $true) }
+    $b
 }
 $curAccent = $(if ($ThemeAccents.Contains("$($ts.Theme)") -or "$($ts.Theme)" -eq 'Shared') { "$($ts.Theme)" } else { 'Orange' })
 $curBase = $(if ($ThemeBases.Contains("$($ts.ThemeBase)")) { "$($ts.ThemeBase)" } else { 'Hallow' })
 $keys = @($ThemeAccents.Keys)
 foreach ($k in $keys) {
-    Add-Swatch $f $k $ThemeAccents[$k].Accent (RGB 20 12 4) $C.Text ($k -eq $curAccent) ([scriptblock]::Create("Set-Theme 'Theme' '$k'")) $false
+    Add-Swatch $f $k $ThemeAccents[$k].Accent (RGB 20 12 4) (RGB 30 26 38) ($k -eq $curAccent) ([scriptblock]::Create("Set-Theme 'Theme' '$k'")) $false | Out-Null
 }
 $shHex = Get-HallowAccentHex
 $shCol = $(if ($shHex) { ConvertFrom-HexColor $shHex } else { $ThemeAccents['Orange'].Accent })
-Add-Swatch $f 'Hallow accent' $shCol $(if ((0.299 * $shCol.R + 0.587 * $shCol.G + 0.114 * $shCol.B) -lt 140) { RGB 255 255 255 } else { RGB 20 12 4 }) $C.Text ('Shared' -eq $curAccent) { if (-not (Get-HallowAccentHex)) { Log 'Pick a Hallow accent on the Hallow tab first.'; return }; Set-Theme 'Theme' 'Shared' } $true
+Add-Swatch $f 'Hallow accent' $shCol $(if ((0.299 * $shCol.R + 0.587 * $shCol.G + 0.114 * $shCol.B) -lt 140) { RGB 255 255 255 } else { RGB 20 12 4 }) (RGB 30 26 38) ('Shared' -eq $curAccent) { if (-not (Get-HallowAccentHex)) { Log 'Pick a Hallow accent on the Hallow tab first.'; return }; Set-Theme 'Theme' 'Shared' } $true | Out-Null
 $keys = @($ThemeBases.Keys)
 foreach ($k in $keys) {
     $label = @{ 'Hallow' = 'Hallow dark'; 'Graphite' = 'Graphite'; 'Navy' = 'Navy'; 'OLED' = 'OLED black' }[$k]
-    Add-Swatch $f $label $ThemeBases[$k].Bg $C.Text $(if ($k -eq $curBase) { $C.Accent } else { $ThemeBases[$k].PanelHi }) ($k -eq $curBase) ([scriptblock]::Create("Set-Theme 'ThemeBase' '$k'")) ($k -eq $keys[-1])
+    Add-Swatch $f $label $ThemeBases[$k].Bg (RGB 236 232 244) $(if ($k -eq $curBase) { $ta.Accent } else { $ThemeBases[$k].PanelHi }) ($k -eq $curBase) ([scriptblock]::Create("Set-Theme 'ThemeBase' '$k'")) ($k -eq $keys[-1]) | Out-Null
 }
-(Add-Note $f 'Top row: accent colour for buttons, icons and highlights (Hallow accent = the colour shared by all Hallow apps, picked on the Hallow tab). Bottom row: background. Your pick is kept across updates and goes along with Share your setup.').Height = 36
+(Add-Note $f 'Top row: accent colour for buttons, icons and highlights (Hallow accent = the colour shared by all Hallow apps, picked on the Hallow tab). Second row: background in dark mode. Your pick is kept across updates and goes along with Share your setup.').Height = 36
+# v5.16: Look - follow the Hallow light / dark switch (Hallow tab), or always light / always dark for the toolkit
+$script:LookButtons = @()
+$lookLbl = Add-Note $f ''
+function Update-LookPicker {
+    $cur = "$((Get-Settings).Look)"; if ($cur -notin 'Light', 'Dark') { $cur = 'Hallow' }
+    foreach ($b in $script:LookButtons) { $on = ("$($b.AccessibleName)" -eq $cur); $b.Text = $(if ($on) { "$($b.AccessibleDefaultActionDescription)  (on)" } else { $b.AccessibleDefaultActionDescription }); $b.FlatAppearance.BorderSize = $(if ($on) { 3 } else { 1 }); $b.FlatAppearance.BorderColor = $(if ($on) { $C.Accent } else { $C.Grid }) }
+    $lookLbl.Text = "Look: " + $(if ($cur -eq 'Hallow') { "follows Hallow ($($HallowModes[(Get-HallowMode)]) - set on the Hallow tab), now $(if ($script:LookLight) { 'light' } else { 'dark' })." } else { "always $($cur.ToLower()) for the toolkit." })
+}
+function Set-ToolkitLook([string]$Value) {
+    $s = Get-Settings; $s | Add-Member -NotePropertyName 'Look' -NotePropertyValue $Value -Force; Save-Settings $s
+    [void](Update-ToolkitLook); Update-LookPicker
+    Log "Look: $(@{ Hallow = 'Follow Hallow'; Light = 'Light'; Dark = 'Dark' }[$Value])."
+}
+foreach ($lk in @(@('Hallow', 'Follow Hallow'), @('Light', 'Light'), @('Dark', 'Dark'))) {
+    $b = New-Object System.Windows.Forms.Button
+    $b.UseMnemonic = $false; $b.FlatStyle = 'Flat'; $b.BackColor = $C.Panel; $b.ForeColor = $C.Text; $b.FlatAppearance.MouseOverBackColor = $C.PanelHi
+    $b.Size = New-Object System.Drawing.Size(150, 40); $b.Margin = New-Object System.Windows.Forms.Padding(0, 0, 10, 10); $b.Font = New-Font 9.5
+    $b.Cursor = [System.Windows.Forms.Cursors]::Hand; $b.AccessibleName = $lk[0]; $b.AccessibleDefaultActionDescription = $lk[1]
+    $b.Add_Click({ Set-ToolkitLook "$($this.AccessibleName)" })
+    $f.Controls.Add($b); $script:LookButtons += $b
+}
+$f.SetFlowBreak($f.Controls[$f.Controls.Count - 1], $true)
+Update-LookPicker
 
 Add-Section $f 'Toolkit updates'
 Add-Tool $f 'Check for toolkit updates' 'Get the newest Hallow Toolkit' { Start-SelfUpdateCheck } -Primary | Out-Null
@@ -1256,8 +1303,57 @@ foreach ($l in $launchers) {
 . (Join-Path $PSScriptRoot 'HallowChecksPage.ps1')   # v5.15: driver check + drive health rows (Health)
 . (Join-Path $PSScriptRoot 'HallowGamerToolsPage.ps1')   # v5.14: input + screen tests (Tools), ping graph + route, DNS undo (Network), refresh rate, shader caches, gaming settings (Gaming), verify files (Games)
 
+# ---- v5.16: light / dark applied live. Every control's colours are swapped palette value for palette value
+# (fills map to fills, text to text), icons are redrawn in the new colour, owner-drawn parts read $C when they paint.
+function Update-ToolkitLook([switch]$Force) {
+    $light = ((Resolve-HallowLook "$((Get-Settings).Look)" (Get-HallowMode)) -eq 'light')
+    if ($env:HALLOW_LOOK -in 'light', 'dark') { $light = ($env:HALLOW_LOOK -eq 'light') }
+    if ($light -eq $script:LookLight -and -not $Force) { return $false }
+    $new = Get-ToolkitPalette $light
+    $backMap = @{}; $foreMap = @{}
+    foreach ($k in 'Bg', 'Nav', 'Panel', 'PanelHi', 'AccentFill', 'AccentFillHover', 'Grid', 'LineHot', 'Good', 'Warn', 'Bad', 'Purple', 'Text', 'Muted', 'Accent', 'AccentText') { $a = $C[$k].ToArgb(); if (-not $backMap.ContainsKey($a)) { $backMap[$a] = $new[$k] } }
+    foreach ($k in 'Text', 'Muted', 'Accent', 'Purple', 'AccentText', 'Good', 'Warn', 'Bad', 'Grid', 'Bg', 'Nav', 'Panel', 'PanelHi', 'AccentFill') { $a = $C[$k].ToArgb(); if (-not $foreMap.ContainsKey($a)) { $foreMap[$a] = $new[$k] } }
+    $mapB = { param($c) $a = $c.ToArgb(); if ($backMap.ContainsKey($a)) { $backMap[$a] } elseif ($foreMap.ContainsKey($a)) { $foreMap[$a] } else { $c } }
+    $mapF = { param($c) $a = $c.ToArgb(); if ($foreMap.ContainsKey($a)) { $foreMap[$a] } elseif ($backMap.ContainsKey($a)) { $backMap[$a] } else { $c } }
+    $mapI = { param($img) if ($img -and $script:IconMeta.ContainsKey($img)) { $m = $script:IconMeta[$img]; $nc = & $mapF ([System.Drawing.Color]::FromArgb($m[1])); Get-Icon $m[0] $nc $m[2] $m[3] } else { $img } }
+    $walk = {
+        param($ctl)
+        if ("$($ctl.AccessibleDescription)" -ne 'hallow-fixed') {
+            if (-not $ctl.BackColor.IsSystemColor -and $ctl.BackColor.A -eq 255) { $ctl.BackColor = & $mapB $ctl.BackColor }
+            if (-not $ctl.ForeColor.IsSystemColor) { $ctl.ForeColor = & $mapF $ctl.ForeColor }
+            if ($ctl -is [System.Windows.Forms.ButtonBase]) {
+                $flat = $ctl.FlatAppearance
+                if (-not $flat.BorderColor.IsEmpty) { $flat.BorderColor = & $mapF $flat.BorderColor }
+                if (-not $flat.MouseOverBackColor.IsEmpty) { $flat.MouseOverBackColor = & $mapB $flat.MouseOverBackColor }
+                if (-not $flat.MouseDownBackColor.IsEmpty) { $flat.MouseDownBackColor = & $mapB $flat.MouseDownBackColor }
+            }
+            if ($ctl -is [System.Windows.Forms.ButtonBase] -or $ctl -is [System.Windows.Forms.PictureBox] -or $ctl -is [System.Windows.Forms.Label]) { if ($ctl.Image) { $ctl.Image = & $mapI $ctl.Image } }
+            if ($ctl -is [System.Windows.Forms.ListView]) {
+                foreach ($it in $ctl.Items) { if (-not $it.ForeColor.IsSystemColor) { $it.ForeColor = & $mapF $it.ForeColor }; if (-not $it.BackColor.IsSystemColor) { $it.BackColor = & $mapB $it.BackColor } }
+            }
+        }
+        foreach ($c in $ctl.Controls) { & $walk $c }
+    }
+    $form.SuspendLayout()
+    try {
+        & $walk $form
+        foreach ($k in @($script:NavIcons.Keys)) { $script:NavIcons[$k] = @((& $mapI $script:NavIcons[$k][0]), (& $mapI $script:NavIcons[$k][1])) }
+        foreach ($k in @($new.Keys)) { $C[$k] = $new[$k] }
+        $script:LookLight = $light
+        Set-DarkChrome $form -Live
+    } finally { $form.ResumeLayout() }
+    if ($script:CurrentPage) { Show-Page $script:CurrentPage }
+    $form.Refresh()
+    $true
+}
+# follow theme.json, the toolkit's own Look and (for "Same as Windows") Windows itself - checked every 3 s
+$lookTimer = New-Object System.Windows.Forms.Timer
+$lookTimer.Interval = 3000
+$lookTimer.Add_Tick({ try { if (Update-ToolkitLook) { if (Get-Command Update-LookPicker -ErrorAction SilentlyContinue) { Update-LookPicker }; if (Get-Command Update-ModePicker -ErrorAction SilentlyContinue) { Update-ModePicker } } } catch { } })
+
 # ---- go
 $form.Add_Shown({
+    $lookTimer.Start()
     Set-DarkChrome $form
     if (-not $pages.Contains($StartPage)) { $StartPage = 'Tune-up' }
     Show-Page $StartPage
@@ -1271,13 +1367,17 @@ $form.Add_Shown({
     })
     $t.Start()
 })
-$form.Add_FormClosing({ $monTimer.Stop(); $jobTimer.Stop() })
+$form.Add_FormClosing({ $monTimer.Stop(); $jobTimer.Stop(); $lookTimer.Stop() })
 # Developer snapshots: HALLOW_SNAP=<folder> renders pages off-screen to PNGs and exits (no startup tasks run).
 if ($env:HALLOW_SNAP) {
     $script:AfterShown.Clear()
     $form.ShowInTaskbar = $false; $form.StartPosition = 'Manual'; $form.Location = New-Object System.Drawing.Point(-32000, -32000)
     $form.Show(); Set-DarkChrome $form; [System.Windows.Forms.Application]::DoEvents()
     New-Item -ItemType Directory -Force $env:HALLOW_SNAP | Out-Null
+    $snapRounds = @('')
+    if ($env:HALLOW_SNAP_RELOOK) { $snapRounds += '-relook' }   # then switch light <-> dark live and render again
+    foreach ($round in $snapRounds) {
+    if ($round) { $env:HALLOW_LOOK = $(if ($script:LookLight) { 'dark' } else { 'light' }); [void](Update-ToolkitLook); 1..5 | ForEach-Object { [System.Windows.Forms.Application]::DoEvents() } }
     foreach ($p in @(($env:HALLOW_SNAP_PAGES -split ',') | Where-Object { $_ })) {
         Show-Page $p; 1..5 | ForEach-Object { [System.Windows.Forms.Application]::DoEvents() }
         if ($env:HALLOW_SNAP_SCROLL) {   # scroll to the first control whose text has this in it (to check lower sections)
@@ -1287,7 +1387,8 @@ if ($env:HALLOW_SNAP) {
         if (-not ('HallowPw' -as [type])) { Add-Type -Namespace '' -Name HallowPw -MemberDefinition '[System.Runtime.InteropServices.DllImport("user32.dll")] public static extern bool PrintWindow(System.IntPtr h, System.IntPtr dc, uint f);' }
         $bmp = New-Object System.Drawing.Bitmap($form.Width, $form.Height); $gg = [System.Drawing.Graphics]::FromImage($bmp); $dc = $gg.GetHdc()
         [void][HallowPw]::PrintWindow($form.Handle, $dc, 2); $gg.ReleaseHdc($dc); $gg.Dispose()
-        $bmp.Save((Join-Path $env:HALLOW_SNAP "$($p -replace '[^\w-]', '').png")); $bmp.Dispose()
+        $bmp.Save((Join-Path $env:HALLOW_SNAP "$($p -replace '[^\w-]', '')$round.png")); $bmp.Dispose()
+    }
     }
     $form.Close(); return
 }

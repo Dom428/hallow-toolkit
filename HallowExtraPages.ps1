@@ -15,7 +15,7 @@ function Show-Chooser([string]$Title, [string[]]$Items, [string]$Button = 'OK') 
     $lb.Dock = 'Fill'; $lb.BackColor = $C.Panel; $lb.ForeColor = $C.Text; $lb.BorderStyle = 'None'; $lb.CheckOnClick = $true
     foreach ($i in $Items) { [void]$lb.Items.Add($i) }
     $ok = New-Object System.Windows.Forms.Button
-    $ok.Text = $Button; $ok.Dock = 'Bottom'; $ok.Height = 40; $ok.FlatStyle = 'Flat'; $ok.BackColor = $C.Accent; $ok.ForeColor = $C.AccentText
+    $ok.Text = $Button; $ok.Dock = 'Bottom'; $ok.Height = 40; $ok.FlatStyle = 'Flat'; $ok.BackColor = $C.AccentFill; $ok.ForeColor = $C.AccentText
     $ok.DialogResult = 'OK'
     $d.Controls.Add($lb); $d.Controls.Add($ok); $d.AcceptButton = $ok
     if ($d.ShowDialog($form) -eq 'OK') { @($lb.CheckedItems | ForEach-Object { [string]$_ }) } else { @() }

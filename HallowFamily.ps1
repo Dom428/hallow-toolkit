@@ -353,15 +353,98 @@ function Get-HallowAccentHex {
     $null
 }
 function ConvertFrom-HexColor([string]$Hex) { [System.Drawing.Color]::FromArgb([Convert]::ToInt32($Hex.Substring(1, 2), 16), [Convert]::ToInt32($Hex.Substring(3, 2), 16), [Convert]::ToInt32($Hex.Substring(5, 2), 16)) }
-function Set-HallowAccent([string]$Hex) {
-    if ($Hex -notmatch '^#[0-9A-Fa-f]{6}$') { throw "Not a colour: $Hex" }
+# v5.16: theme.json keeps every field it already has (other apps may add their own); only the ones given change.
+function Get-HallowThemeData {
+    $d = [ordered]@{}
+    try {
+        $j = Get-Content $HallowThemeFile -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($j) { foreach ($p in $j.PSObject.Properties) { $d[$p.Name] = $p.Value } }
+    } catch { }
+    $d
+}
+function Save-HallowThemeData([System.Collections.IDictionary]$Changes) {
+    $d = Get-HallowThemeData
+    foreach ($k in $Changes.Keys) { $d[$k] = $Changes[$k] }
+    $d['updated'] = (Get-Date).ToString('s')
     New-Item -ItemType Directory -Force (Split-Path $HallowThemeFile) | Out-Null
-    $json = [ordered]@{ accent = $Hex.ToUpper(); updated = (Get-Date).ToString('s') } | ConvertTo-Json -Compress
+    $json = [pscustomobject]$d | ConvertTo-Json -Compress -Depth 6
     $tmp = "$HallowThemeFile.tmp"
     [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
     if (Test-Path $HallowThemeFile) { [IO.File]::Replace($tmp, $HallowThemeFile, [NullString]::Value) } else { [IO.File]::Move($tmp, $HallowThemeFile) }
 }
+function Set-HallowAccent([string]$Hex) {
+    if ($Hex -notmatch '^#[0-9A-Fa-f]{6}$') { throw "Not a colour: $Hex" }
+    Save-HallowThemeData @{ accent = $Hex.ToUpper() }
+}
 
+# ================================================================ LIGHT / DARK MODE (v5.16)
+# theme.json "mode": "dark" | "light" | "system" (missing or anything else = "dark", the look before 5.16).
+# "system" follows Windows: HKCU\...\Themes\Personalize AppsUseLightTheme (1 = light). Each app can override it
+# (the toolkit's own: Tools > Theme > Look). The toolkit owns the family switch (Hallow tab).
+$HallowModes = [ordered]@{ 'light' = 'Light'; 'dark' = 'Dark'; 'system' = 'Same as Windows' }
+function Get-HallowMode {
+    $m = "$((Get-HallowThemeData)['mode'])".Trim().ToLower()
+    if ($HallowModes.Contains($m)) { $m } else { 'dark' }
+}
+function Set-HallowMode([string]$Mode) {
+    $Mode = "$Mode".Trim().ToLower()
+    if (-not $HallowModes.Contains($Mode)) { throw "Not a mode: $Mode" }
+    Save-HallowThemeData @{ mode = $Mode }
+}
+# Windows "apps use light theme" - read only, never changed. $null when it can't be read (treated as dark).
+function Get-WindowsAppsLight([string]$Key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize') {
+    try { $v = (Get-ItemProperty -LiteralPath $Key -Name AppsUseLightTheme -ErrorAction Stop).AppsUseLightTheme; return ([int]$v -eq 1) } catch { $null }
+}
+# light or dark for one app: its own override (Light / Dark) wins, else the family mode; "system" asks $SystemLight
+# (a scriptblock, so tests can pass a fake). Returns 'light' or 'dark'.
+function Resolve-HallowLook([string]$Override, [string]$FamilyMode, [scriptblock]$SystemLight = { Get-WindowsAppsLight }) {
+    $o = "$Override".Trim().ToLower()
+    if ($o -eq 'light' -or $o -eq 'dark') { return $o }
+    $m = "$FamilyMode".Trim().ToLower()
+    if ($m -eq 'light') { return 'light' }
+    if ($m -eq 'system') { if ([bool](& $SystemLight)) { return 'light' } else { return 'dark' } }
+    'dark'
+}
+# WCAG contrast between two colours (1..21)
+function Get-RelLuminance([System.Drawing.Color]$C) {
+    $f = { param($v) $v = $v / 255.0; if ($v -le 0.03928) { $v / 12.92 } else { [math]::Pow(($v + 0.055) / 1.055, 2.4) } }
+    0.2126 * (& $f $C.R) + 0.7152 * (& $f $C.G) + 0.0722 * (& $f $C.B)
+}
+function Get-ContrastRatio([System.Drawing.Color]$A, [System.Drawing.Color]$B) {
+    $la = Get-RelLuminance $A; $lb = Get-RelLuminance $B
+    ([math]::Max($la, $lb) + 0.05) / ([math]::Min($la, $lb) + 0.05)
+}
+# the accent darkened in HSL (hue and saturation kept) until text in it reads on white (>= 4.5:1)
+function Get-LightTextAccent([System.Drawing.Color]$Accent, [double]$Min = 4.5, [System.Drawing.Color]$On = [System.Drawing.Color]::White) {
+    $white = $On   # the surface the text sits on (white unless given)
+    if ((Get-ContrastRatio $Accent $white) -ge $Min) { return $Accent }
+    $h = $Accent.GetHue() / 360.0; $s = [double]$Accent.GetSaturation(); $l = [double]$Accent.GetBrightness()
+    $toRgb = {
+        param($h, $s, $l)
+        if ($s -eq 0) { $v = [int][math]::Round($l * 255); return [System.Drawing.Color]::FromArgb($v, $v, $v) }
+        $q = if ($l -lt 0.5) { $l * (1 + $s) } else { $l + $s - $l * $s }; $p = 2 * $l - $q
+        $hue = { param($p, $q, $t) if ($t -lt 0) { $t += 1 }; if ($t -gt 1) { $t -= 1 }
+            if ($t -lt 1 / 6) { return $p + ($q - $p) * 6 * $t }; if ($t -lt 0.5) { return $q }; if ($t -lt 2 / 3) { return $p + ($q - $p) * (2 / 3 - $t) * 6 }; $p }
+        [System.Drawing.Color]::FromArgb([int][math]::Round(255 * (& $hue $p $q ($h + 1 / 3))), [int][math]::Round(255 * (& $hue $p $q $h)), [int][math]::Round(255 * (& $hue $p $q ($h - 1 / 3))))
+    }
+    $c = $Accent
+    while ($l -gt 0) {
+        $l = [math]::Max(0.0, $l - 0.01); $c = & $toRgb $h $s $l
+        if ((Get-ContrastRatio $c $white) -ge $Min) { break }
+    }
+    $c
+}
+# text on a filled accent button: whichever of dark text / white reads better
+function Get-AccentFillText([System.Drawing.Color]$Accent) {
+    $dark = [System.Drawing.Color]::FromArgb(0x1E, 0x1A, 0x26); $white = [System.Drawing.Color]::White
+    if ((Get-ContrastRatio $Accent $dark) -ge (Get-ContrastRatio $Accent $white)) { $dark } else { $white }
+}
+
+# the fill for accent buttons in light mode: the real accent, unless neither text colour reaches 4.5:1 on it (e.g. violet
+# #8B5CF6) - then the darkened text accent, with white text
+function Get-LightAccentFill([System.Drawing.Color]$Accent) {
+    if ((Get-ContrastRatio $Accent (Get-AccentFillText $Accent)) -ge 4.5) { $Accent } else { Get-LightTextAccent $Accent }
+}
 # ================================================================ CRASH REPORTS (v5.8)
 # <toolkit folder>\crashes\<yyyy-MM-dd HH-mm-ss>.txt: version, Windows, time, the error and where it happened. Never settings,
 # keys, links or file contents (web addresses in messages are blanked). Newest 20 kept. Nothing is sent anywhere.
