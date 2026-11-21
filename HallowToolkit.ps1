@@ -139,7 +139,10 @@ if (-not ('HallowDark' -as [type])) {
 }
 function Set-DarkChrome($Control, [switch]$Live) {
     try {
-        if ($Live -and $script:LookLight -and $Control -is [System.Windows.Forms.UpDownBase]) { return }   # number boxes fail to paint when their dark theme is taken off live; they keep it until the toolkit reopens
+        # v5.17: number boxes (NumericUpDown) draw their own border with the Edit visual style, and a window theme on them
+        # makes that fail (a red cross, then no more painting until the toolkit reopens). Their colours come from
+        # BackColor / ForeColor, which the live switch swaps, so they get no window theme in either look.
+        if ($Control -is [System.Windows.Forms.UpDownBase]) { return }
         if ($Control -is [System.Windows.Forms.Form]) { $v = $(if ($script:LookLight) { 0 } else { 1 }); [void][HallowDark]::DwmSetWindowAttribute($Control.Handle, 20, [ref]$v, 4) }
         elseif ($Control -is [System.Windows.Forms.ScrollableControl] -or $Control -is [System.Windows.Forms.TextBoxBase] -or $Control -is [System.Windows.Forms.ListView] -or $Control -is [System.Windows.Forms.ListBox]) {
             [void][HallowDark]::SetWindowTheme($Control.Handle, $(if (-not $script:LookLight) { 'DarkMode_Explorer' } elseif ($Control -is [System.Windows.Forms.ListView]) { 'Explorer' } else { [NullString]::Value }), $(if ($script:LookLight) { [NullString]::Value } else { $null }))   # light: NULL, NULL = the default theme ($null would pass "" and switch theming off); dark as before
@@ -1328,9 +1331,21 @@ function Update-ToolkitLook([switch]$Force) {
                 if (-not $flat.MouseDownBackColor.IsEmpty) { $flat.MouseDownBackColor = & $mapB $flat.MouseDownBackColor }
             }
             if ($ctl -is [System.Windows.Forms.ButtonBase] -or $ctl -is [System.Windows.Forms.PictureBox] -or $ctl -is [System.Windows.Forms.Label]) { if ($ctl.Image) { $ctl.Image = & $mapI $ctl.Image } }
-            if ($ctl -is [System.Windows.Forms.ListView]) {
-                foreach ($it in $ctl.Items) { if (-not $it.ForeColor.IsSystemColor) { $it.ForeColor = & $mapF $it.ForeColor }; if (-not $it.BackColor.IsSystemColor) { $it.BackColor = & $mapB $it.BackColor } }
+            if ($script:PrimaryButtons -and $script:PrimaryButtons.Contains($ctl)) {
+                # v5.17: text and icon on a filled accent button are always the fill's own text colour (in light it is the
+                # same colour as normal text, so the swap above could turn them white on a light accent)
+                $ctl.ForeColor = $new.AccentText
+                if ($ctl.Image -and $script:IconMeta.ContainsKey($ctl.Image)) { $m = $script:IconMeta[$ctl.Image]; $ctl.Image = Get-Icon $m[0] $new.AccentText $m[2] $m[3] }
             }
+            if ($ctl -is [System.Windows.Forms.ListView]) {
+                foreach ($it in $ctl.Items) {
+                    if (-not $it.ForeColor.IsSystemColor) { $it.ForeColor = & $mapF $it.ForeColor }; if (-not $it.BackColor.IsSystemColor) { $it.BackColor = & $mapB $it.BackColor }
+                    if (-not $it.UseItemStyleForSubItems) {   # v5.17: cells with their own colour (amber "65%", red "MUTED" ...); cell 0 is the item itself
+                        for ($si = 1; $si -lt $it.SubItems.Count; $si++) { $sub = $it.SubItems[$si]; if (-not $sub.ForeColor.IsSystemColor) { $sub.ForeColor = & $mapF $sub.ForeColor }; if (-not $sub.BackColor.IsSystemColor) { $sub.BackColor = & $mapB $sub.BackColor } }
+                    }
+                }
+            }
+            if ($ctl -is [System.Windows.Forms.UpDownBase]) { $ctl.Invalidate($true) }   # v5.17: the box, its text part and its arrows
         }
         foreach ($c in $ctl.Controls) { & $walk $c }
     }
@@ -1388,6 +1403,22 @@ if ($env:HALLOW_SNAP) {
         $bmp = New-Object System.Drawing.Bitmap($form.Width, $form.Height); $gg = [System.Drawing.Graphics]::FromImage($bmp); $dc = $gg.GetHdc()
         [void][HallowPw]::PrintWindow($form.Handle, $dc, 2); $gg.ReleaseHdc($dc); $gg.Dispose()
         $bmp.Save((Join-Path $env:HALLOW_SNAP "$($p -replace '[^\w-]', '')$round.png")); $bmp.Dispose()
+        if ($env:HALLOW_SNAP_DUMP) {   # v5.17: page|type|parent type|back|fore|x,y,w,h in the snapshot (tests check live light / dark with it)
+            $ox = [int](($form.Width - $form.ClientSize.Width) / 2); $oy = $form.Height - $form.ClientSize.Height - $ox
+            $hex = { param($c) '#{0:X2}{1:X2}{2:X2}' -f $c.R, $c.G, $c.B }
+            $dump = New-Object System.Collections.Generic.List[string]
+            $dw = {
+                param($ctl)
+                $pt = $form.PointToClient($ctl.PointToScreen([System.Drawing.Point]::Empty))
+                $dump.Add(('{0}{1}|{2}|{3}|{4}|{5}|{6},{7},{8},{9}' -f $p, $round, $ctl.GetType().Name, $ctl.Parent.GetType().Name, (& $hex $ctl.BackColor), (& $hex $ctl.ForeColor), ($pt.X + $ox), ($pt.Y + $oy), $ctl.Width, $ctl.Height))
+                if ($ctl -is [System.Windows.Forms.ListView]) {
+                    foreach ($it in $ctl.Items) { for ($si = 0; $si -lt $it.SubItems.Count; $si++) { $dump.Add(('{0}{1}|ListCell|{2}|{3}|{4}|{5}' -f $p, $round, $si, (& $hex $it.SubItems[$si].BackColor), (& $hex $it.SubItems[$si].ForeColor), ($it.SubItems[$si].Text -replace '\|', '/'))) } }
+                }
+                foreach ($c in $ctl.Controls) { & $dw $c }
+            }
+            & $dw $script:PageFlows[$p]
+            [IO.File]::AppendAllLines($env:HALLOW_SNAP_DUMP, $dump)
+        }
     }
     }
     $form.Close(); return

@@ -9,6 +9,13 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.17
+- Light mode readability fixes. The Mic page's level number box switches between light
+  and dark straight away and no longer shows a red frame; amber / red list cells (mic
+  level, Exclusive, Muted) take their readable light colours when you switch; icons and
+  text on filled accent buttons stay readable after switching; session charts use the
+  current look.
+
 WHAT'S NEW IN 5.16
 - Light and dark mode. Hallow tab, next to the Hallow accent: Light / Dark / Same as Windows. It is
   saved in the shared theme.json, so every Hallow app switches straight away (no restart), unless

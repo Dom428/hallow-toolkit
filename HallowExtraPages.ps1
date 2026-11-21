@@ -24,6 +24,7 @@ function Show-Chooser([string]$Title, [string[]]$Items, [string]$Button = 'OK') 
 function New-DarkChart([string]$Title, [string]$Unit) {
     $ch = New-Object System.Windows.Forms.DataVisualization.Charting.Chart
     $ch.Dock = 'Fill'; $ch.BackColor = $C.Bg
+    $GridInk = $C.Grid   # v5.17: the look now (light / dark can change after the toolkit opened)
     $ar = New-Object System.Windows.Forms.DataVisualization.Charting.ChartArea 'a'
     $ar.BackColor = $C.Bg
     foreach ($ax in $ar.AxisX, $ar.AxisY) {
