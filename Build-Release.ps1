@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $src = $PSScriptRoot
 $version = ([regex]::Match((Get-Content "$src\HallowCore.ps1" -Raw), "AppVersion = '([^']+)'")).Groups[1].Value
 $repo = ([regex]::Match((Get-Content "$src\HallowUpdates.ps1" -Raw), "UpdateRepo = '([^']+)'")).Groups[1].Value
-$runtime = Get-ChildItem $src -File | Where-Object { ($_.Extension -in '.ps1', '.ico', '.bat') -and $_.Name -ne 'Build-Release.ps1' }
+$runtime = Get-ChildItem $src -File | Where-Object { ($_.Extension -in '.ps1', '.ico', '.bat', '.ttf', '.txt') -and $_.Name -ne 'Build-Release.ps1' }
 
 $stage = Join-Path $env:TEMP "hallow-build-$version"
 if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
@@ -26,7 +26,9 @@ Remove-Item $stage -Recurse -Force
 
 if ($Deploy) {
     $dest = Join-Path $env:USERPROFILE 'HallowToolkit'
-    if ((Resolve-Path $dest).Path -ne $src) { $runtime | Copy-Item -Destination $dest -Force }
+    if ((Resolve-Path $dest).Path -ne $src) {
+        foreach ($r in $runtime) { $to = Join-Path $dest $r.Name; if (-not (Test-Path $to) -or (Get-FileHash $to).Hash -ne (Get-FileHash $r.FullName).Hash) { Copy-Item $r.FullName $to -Force } }
+    }
     "Updated your install in $dest"
 }
 if ($Publish) {

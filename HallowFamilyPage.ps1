@@ -80,6 +80,7 @@ function Update-AccentPicker {
 function Set-AccentFromPicker([string]$Hex) {
     try { Set-HallowAccent $Hex } catch { Log "Could not save the Hallow accent: $($_.Exception.Message)"; return }
     Update-AccentPicker
+    if (Get-Command Update-HallowTerminalAfterLook -ErrorAction SilentlyContinue) { Update-HallowTerminalAfterLook }   # v5.18
     Log ("Hallow accent set to {0} - the Hallow apps pick it up now.{1}" -f $Hex, $(if ("$((Get-Settings).Theme)" -eq 'Shared') { ' The toolkit shows it next time it opens (or pick it again in Tools > Theme).' } else { ' To use it in the toolkit too: Tools > Theme > Hallow accent.' }))
 }
 foreach ($k in @($HallowAccents.Keys) + 'Custom...') {
@@ -120,6 +121,7 @@ function Set-ModeFromPicker([string]$Mode) {
     try { Set-HallowMode $Mode } catch { Log "Could not save light / dark: $($_.Exception.Message)"; return }
     [void](Update-ToolkitLook); Update-ModePicker; if (Get-Command Update-LookPicker -ErrorAction SilentlyContinue) { Update-LookPicker }
     Log "Hallow apps: $($HallowModes[$Mode]) - they switch now."
+    if (Get-Command Update-HallowTerminalAfterLook -ErrorAction SilentlyContinue) { Update-HallowTerminalAfterLook }   # v5.18
 }
 foreach ($k in @($HallowModes.Keys)) {
     $b = New-Object System.Windows.Forms.Button

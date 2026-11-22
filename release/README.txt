@@ -9,6 +9,19 @@ HOW TO INSTALL
 If Windows shows "Windows protected your PC", click "More info" > "Run anyway".
 It's plain PowerShell - you can open any .ps1 file in Notepad to see exactly what it does.
 
+WHAT'S NEW IN 5.18
+- Hallow Terminal: your own PowerShell and Command Prompt in the Hallow look. Hallow tab >
+  Hallow Terminal > Install adds "Hallow PowerShell" and "Hallow Command Prompt" to Windows
+  Terminal, with Hallow Dark / Hallow Light colour schemes in your Hallow accent (light / dark
+  follows the Hallow switch, Same as Windows included), the Hallow icon and Cascadia Mono. It uses
+  Windows Terminal's fragment folder, so your Terminal settings and PowerShell profile are never
+  changed. Make it the default in Terminal: Settings (Ctrl+,) > Startup > Default profile.
+- The prompt shows the folder, git branch (a dot when there are changes), Hallow VPN, the game
+  you're playing, how long a slow command took and when one failed - in about 4 ms.
+- The hallow command: hallow status, hallow vpn on / off / status, hallow torrents pause /
+  resume, hallow gear (batteries), hallow open <app>, hallow update, hallow help. Tab completes.
+- Update follows a new accent or light / dark; Remove deletes only the Hallow Terminal files.
+
 WHAT'S NEW IN 5.17
 - Light mode readability fixes. The Mic page's level number box switches between light
   and dark straight away and no longer shows a red frame; amber / red list cells (mic

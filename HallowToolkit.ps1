@@ -1304,6 +1304,7 @@ foreach ($l in $launchers) {
 . (Join-Path $PSScriptRoot 'HallowGameRulesPage.ps1')   # v5.10: per-game rules (Gaming)
 . (Join-Path $PSScriptRoot 'HallowBalancePage.ps1')   # v5.13: background restraint, IdleSaver (Gaming)
 . (Join-Path $PSScriptRoot 'HallowChecksPage.ps1')   # v5.15: driver check + drive health rows (Health)
+. (Join-Path $PSScriptRoot 'HallowTerminalPage.ps1')   # v5.18: Hallow Terminal - the Hallow look for Windows Terminal (Hallow)
 . (Join-Path $PSScriptRoot 'HallowGamerToolsPage.ps1')   # v5.14: input + screen tests (Tools), ping graph + route, DNS undo (Network), refresh rate, shader caches, gaming settings (Gaming), verify files (Games)
 
 # ---- v5.16: light / dark applied live. Every control's colours are swapped palette value for palette value

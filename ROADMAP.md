@@ -39,6 +39,7 @@
 | **5.15** | Game-ready check (Game Mode, HAGS, power plan, Game Bar vs Clips, busy apps, Discord, FSO) with fixes behind buttons; read-only driver check; drive health with space trends; Keys, Guard, Assist and the Shield extension on the Hallow tab and in Check links |
 | **5.16** | Light and dark mode: Light / Dark / Same as Windows for every Hallow app (theme.json mode, live), the toolkit's own Look override, live recolouring, darkened accent for text |
 | **5.17** | Light mode readability fixes: Mic number box switches live and paints in both looks, coloured list cells and accent-button icons follow the switch |
+| **5.18** | Hallow Terminal: Windows Terminal fragment with Hallow Dark / Light schemes (accent, light / dark / Same as Windows) and Hallow PowerShell / Command Prompt profiles; fast prompt (git, VPN, game, slow / failed commands); the `hallow` command (status, vpn, torrents, gear, open, update) with Tab completion; Install / Update / Remove on the Hallow tab |
 
 ## Next
 
@@ -63,6 +64,11 @@ What those tools (and Ninite / UniGetUI, WinUtil, HWiNFO) do that the toolkit di
 - Newest GPU driver version from NVIDIA / AMD / Intel (GeForce Experience style) - **later**: needs a lookup on the maker's site per card; the driver check judges by age for now
 - Scoop / Chocolatey / pip / npm sources (UniGetUI) - **not building**: winget covers the apps people install; the others need their own package managers
 - Windows ISO builder (WinUtil MicroWin) - **not here**: image servicing of a Windows ISO is a different tool
+
+### Hallow Terminal
+- A Hallow look for Windows Terminal from the Hallow tab - **done in 5.18** (fragment: schemes + profiles, prompt, `hallow` command)
+- PowerShell 7 profile (the same prompt under pwsh) when PowerShell 7 is installed - **later**
+- Setting Hallow PowerShell as Terminal's default profile from the toolkit - **not here**: a fragment can't change the default, and the toolkit doesn't edit Terminal's settings.json (Settings > Startup does it in two clicks)
 
 ### Hallow family
 - Keys, Guard, Assist and the Shield browser extension on the Hallow tab and in Check links - **done in 5.15**

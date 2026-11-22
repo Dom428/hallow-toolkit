@@ -12,5 +12,6 @@
 bin/
 logs/
 backups/
+terminal/
 !*.ttf
 !FontAwesome-LICENSE.txt
